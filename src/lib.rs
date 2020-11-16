@@ -2,7 +2,9 @@ use std::cell::RefCell;
 use std::rc::Rc;use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram, WebGl2RenderingContext, WebGlShader};
-mod fdw;
+pub mod fdw;
+pub mod shapes;
+
 
 const CUBE_VERT_NUM: usize = 12;
 static CUBE_VERT: [f32;CUBE_VERT_NUM*9] = [
@@ -25,11 +27,11 @@ static CUBE_NOR: [f32;CUBE_VERT_NUM*9] = [
 
 static CUBE_COL: [f32;CUBE_VERT_NUM*12] = [
     1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0,  1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0,
-    1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0,  1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0, 1.0,0.5,0.5,1.0,
+    0.5,1.0,1.0,1.0, 0.5,1.0,1.0,1.0, 0.5,1.0,1.0,1.0,  0.5,1.0,1.0,1.0, 0.5,1.0,1.0,1.0, 0.5,1.0,1.0,1.0,
     0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0,  0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0,
-    0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0,  0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0, 0.5,0.5,1.0,1.0,
+    1.0,1.0,0.5,1.0, 1.0,1.0,0.5,1.0, 1.0,1.0,0.5,1.0,  1.0,1.0,0.5,1.0, 1.0,1.0,0.5,1.0, 1.0,1.0,0.5,1.0,
     0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0,  0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0,
-    0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0,  0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0, 0.5,1.0,0.5,1.0,
+    1.0,0.5,1.0,1.0, 1.0,0.5,1.0,1.0, 1.0,0.5,1.0,1.0,  1.0,0.5,1.0,1.0, 1.0,0.5,1.0,1.0, 1.0,0.5,1.0,1.0,
 ];
 
 static mut SH_0: SlideHolder = SlideHolder{
@@ -69,11 +71,8 @@ fn body0() -> web_sys::HtmlElement {
 // Called when the wasm module is instantiated
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
-    // Use `web_sys`'s global `window` function to get a handle on the global
-    // window object.
-    let window = web_sys::window().expect("no global `window` exists");
-    let document = window.document().expect("should have a document on window");
-    let body = document.body().expect("document should have a body");
+    let document = document();
+    let body = body0();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>()?;
 
@@ -81,7 +80,42 @@ pub fn main() -> Result<(), JsValue> {
                         .unwrap()
                         .dyn_into::<WebGl2RenderingContext>()?;
 
+    // Generate Shader programs
     let vert_shader = compile_shader(
+        &context,
+        WebGl2RenderingContext::VERTEX_SHADER,
+        r#"#version 300 es
+        layout(location = 0) in vec4 position;
+        layout(location = 1) in vec4 normal;
+        layout(location = 2) in vec4 color;
+        uniform   mat4 mMatrix;
+        out   vec4 vNormal;
+        out   vec4 vColor;
+        void main(){
+            gl_Position = mMatrix * position;
+            vNormal = mMatrix * normal;
+            vColor = color;
+        }
+        "#,
+    )?;
+    let frag_shader = compile_shader(
+        &context,
+        WebGl2RenderingContext::FRAGMENT_SHADER,
+        r#"#version 300 es
+        precision mediump float;
+        in	vec4 vNormal;
+        in	vec4 vColor;
+        out vec4 oFragColor;
+        void main() {
+            vec4 nor = normalize(vNormal);
+            mediump float rate = clamp( dot(nor, vec4(0.0,-1.0,0.0,0.0)), 0.5, 1.0 );
+            oFragColor = vColor*rate;
+        }
+        "#,
+    )?;
+    let program = link_program(&context, &vert_shader, &frag_shader)?;
+
+    let vert_shader2 = compile_shader(
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
         r#"#version 300 es
@@ -98,7 +132,7 @@ pub fn main() -> Result<(), JsValue> {
         }
         "#,
     )?;
-    let frag_shader = compile_shader(
+    let frag_shader2 = compile_shader(
         &context,
         WebGl2RenderingContext::FRAGMENT_SHADER,
         r#"#version 300 es
@@ -107,52 +141,71 @@ pub fn main() -> Result<(), JsValue> {
         in	vec4 vColor;
         out vec4 oFragColor;
         void main() {
-            mediump float rate = clamp( dot(vNormal, vec4(0.0,1.0,0.0,0.0)), 0.5, 1.0 );
-            oFragColor = vColor*rate;
+            vec4 newCol = vColor;
+            newCol.r = clamp( vColor.r+0.5, 0.5, 1.0 );
+            oFragColor = newCol;
         }
         "#,
     )?;
-    let program = link_program(&context, &vert_shader, &frag_shader)?;
-    context.use_program(Some(&program));
- 
+    let program2 = link_program(&context, &vert_shader2, &frag_shader2)?;
+
+//    let tsrct = shapes::generate_tesseract();
+
     let col0 = fdw::Color::<u8>{ r:0,g:0,b:0,a:255};
     let col1 = fdw::Color::<u8>{ r:255,g:255,b:255,a:255};
-    let mut tiled_floor = fdw::generate_tiled_floor(1.0, 2, col0, col1);
-    // -> (Vec<f32>,Vec<f32>,Vec<u8>) {
-
-    let mut vtx_vec: Vec<f32> = Vec::new();
-    vtx_vec.extend_from_slice(&CUBE_VERT);
-    vtx_vec.append(&mut tiled_floor.0);
-
-    let mut nor_vec: Vec<f32> = Vec::new();
-    nor_vec.extend_from_slice(&CUBE_NOR);
-    nor_vec.append(&mut tiled_floor.1);
-
+    let tile_num = 4;
+    let tile_triangle = tile_num*tile_num*6;
+    let tiled_floor = shapes::generate_tiled_floor(1.0, tile_num, col0, col1);
+    let vtx_vec = tiled_floor.0;
+    let nor_vec = tiled_floor.1;
     let mut col_vec: Vec<f32> = Vec::new();
-    col_vec.extend_from_slice(&CUBE_COL);
     for v in tiled_floor.2{
         let col = v as f32/255.0;
         col_vec.push(col);
-    } 
+    }
 
-    // vertex ------------------------------------------------------------------------
-    create_f32_buffer(&context, &vtx_vec)?;
-//    create_f32_buffer(&context, &CUBE_VERT)?;
-    context.vertex_attrib_pointer_with_i32(0, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
-    context.enable_vertex_attrib_array(0);
-    
-    // normal ------------------------------------------------------------------------
-    create_f32_buffer(&context, &nor_vec)?;
-//    create_f32_buffer(&context, &CUBE_NOR)?;
+    // Objects ------------------------------------------------------------------------
+    let mut v0: js_sys::Float32Array;
+    let mut v1: js_sys::Float32Array;
+    let mut v2: js_sys::Float32Array;
 
-    context.vertex_attrib_pointer_with_i32(1, 3, WebGl2RenderingContext::FLOAT, false, 0, 0);
-    context.enable_vertex_attrib_array(1);
-    
-    // color ------------------------------------------------------------------------
-    create_f32_buffer(&context, &col_vec)?;
-//    create_f32_buffer(&context, &CUBE_COL)?;
-    context.vertex_attrib_pointer_with_i32(2, 4, WebGl2RenderingContext::FLOAT, false, 0, 0);
-    context.enable_vertex_attrib_array(2);
+    // Cube ------------------------------------------------------------------------
+    let v_buf = create_f32_buffer(&context, &CUBE_VERT)?;
+    let n_buf = create_f32_buffer(&context, &CUBE_NOR)?;
+    let c_buf = create_f32_buffer(&context, &CUBE_COL)?;
+
+    unsafe{
+        v0 = js_sys::Float32Array::view(&CUBE_VERT);
+        v1 = js_sys::Float32Array::view(&CUBE_NOR);
+        v2 = js_sys::Float32Array::view(&CUBE_COL);
+    }
+    let shader1 = ShaderSet3{
+        gl_prog: program,
+        gl_buf: [ v_buf, n_buf, c_buf ],
+        vertices: [ v0, v1, v2 ],
+        atr_idx: [ 0,1,2 ],
+        atr_size: [3,3,4],
+        tri_num: (CUBE_VERT_NUM as i32)*3
+    };
+
+    // Floor ------------------------------------------------------------------------
+    let v_buf = create_f32_buffer(&context, &vtx_vec)?;
+    let n_buf = create_f32_buffer(&context, &nor_vec)?;
+    let c_buf = create_f32_buffer(&context, &col_vec)?;
+
+    unsafe{
+        v0 = js_sys::Float32Array::view(&vtx_vec);
+        v1 = js_sys::Float32Array::view(&nor_vec);
+        v2 = js_sys::Float32Array::view(&col_vec);
+    }
+    let shader2 = ShaderSet3{
+        gl_prog: program2,
+        gl_buf: [ v_buf, n_buf, c_buf ],
+        vertices: [ v0, v1, v2 ],
+        atr_idx: [ 0,1,2 ],
+        atr_size: [3,3,4],
+        tri_num: tile_triangle
+    };
 
     // clear BG ---------------------------------------------------------------------
     context.clear_color(0.8, 0.8, 1.0, 1.0);
@@ -160,8 +213,8 @@ pub fn main() -> Result<(), JsValue> {
     
     // Views ---------------------------------------------------------------------
     let mut view_pos = fdw::Views{
-        eye: fdw::Vec3D{ x:0.0, y:2.0, z:6.0 },
-        look_at:      fdw::Vec3D{ x:0.0, y:0.0, z:-2.0 },
+        eye:      fdw::Vec3D{ x:0.0, y:2.0, z:6.0 },
+        look_at:  fdw::Vec3D{ x:0.0, y:0.0, z:-2.0 },
         eye_base: fdw::Vec3D{ x:0.0, y:2.0, z:6.0 },
     };
 
@@ -173,9 +226,10 @@ pub fn main() -> Result<(), JsValue> {
     };
 
     // Dwpth Test, Culling
-//    context.enable(WebGl2RenderingContext::CULL_FACE);
+    context.enable(WebGl2RenderingContext::CULL_FACE);
     context.enable(WebGl2RenderingContext::DEPTH_TEST);
     context.depth_func(WebGl2RenderingContext::LEQUAL);
+    let canvas_rate = canvas.width() as f32/canvas.height() as f32;
 
     console_log!("Light!");
 
@@ -200,7 +254,37 @@ pub fn main() -> Result<(), JsValue> {
             return;
         }
 */
-        draw_scene(&context, &program, &mut view_pos);
+        context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+        unsafe{
+            view_pos.look_at.x = SH_0.value[2]*2.0;
+            view_pos.look_at.y = SH_0.value[3]*2.0;
+            view_pos.look_at.z = -SH_0.value[4]*2.0;
+        }
+        let vp_mat = view_pos.gen_view_proj(canvas_rate);
+
+        let mut rx = 0.0;
+        let mut ry = 0.0;
+        let mut rz = 0.0;
+        unsafe{
+            rx = SH_0.value[5]*2.0;
+            ry = SH_0.value[6]*2.0;
+            rz = SH_0.value[7]*2.0;
+        }
+    
+        let mdl_mat = fdw::Mat4D::identity();
+        let mx = fdw::Mat4D::rotate(rx,0);
+        let my = fdw::Mat4D::rotate(ry,1);
+        let mz = fdw::Mat4D::rotate(rz,2);
+        let m_mat = &vp_mat*&mdl_mat;
+        let m_mat = &mx*&m_mat;
+        let m_mat = &my*&m_mat; 
+        let mvp_mat = &mz*&m_mat; 
+    
+        // Cube
+        draw_scene(&context, &shader1, &mvp_mat);
+        // Floor
+        draw_scene(&context, &shader2, &vp_mat);
 
         // Set the body's text content to how many times this
         // requestAnimationFrame callback has fired.
@@ -218,49 +302,14 @@ pub fn main() -> Result<(), JsValue> {
 }
 
 
-fn draw_scene( context: &WebGl2RenderingContext, program: &WebGlProgram, view: &mut fdw::Views ){
-    let doc = document();
-    let canvas = doc.get_element_by_id("canvas").unwrap();
-    let canvas: web_sys::HtmlCanvasElement = canvas.dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
-    context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+#[allow(unused_assignments)]
+fn draw_scene( context: &WebGl2RenderingContext, shader: &ShaderSet3, mvp_mat: &fdw::Mat4D){
 
-    let mut rx = 0.0;
-    let mut ry = 0.0;
-    let mut rz = 0.0;
-    unsafe{
-        view.look_at.x = SH_0.value[2]*2.0;
-        view.look_at.y = SH_0.value[3]*2.0;
-        view.look_at.z = -SH_0.value[4]*2.0;
-        rx = SH_0.value[5];
-        ry = SH_0.value[6];
-        rz = SH_0.value[7];
-    }
-    let v_mat = view.look_at(&fdw::Vec3D{ x:0.0, y:1.0, z:0.0});
-    let cnv_rate = canvas.width() as f32/canvas.height() as f32;
-    let proj_mat = fdw::Mat4D::perspective(45.0, cnv_rate, 0.1, 100.0);
-    let m_mat = &v_mat*&proj_mat;
-    let m_mat2 = m_mat;
-
-    let mdl_mat = fdw::Mat4D::identity();
-    let mx = fdw::Mat4D::rotate(rx,0);
-    let my = fdw::Mat4D::rotate(ry,1);
-    let mz = fdw::Mat4D::rotate(rz,2);
-    let m_mat = &m_mat*&mdl_mat;
-    let m_mat = &mx*&m_mat;
-    let m_mat = &my*&m_mat; 
-    let m_mat = &mz*&m_mat; 
-
-    let loc = context.get_uniform_location(&program, "mMatrix").ok_or("failed to get uniform location").unwrap();
+    shader.set_prog(context);
+    let loc = context.get_uniform_location(&shader.gl_prog, "mMatrix").ok_or("failed to get uniform location").unwrap();
     let loc = Some(&loc);
-    context.uniform_matrix4fv_with_f32_array(loc,false,&m_mat.a);
-    context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, (CUBE_VERT_NUM as i32)*3);
-
-    context.uniform_matrix4fv_with_f32_array(loc,false,&m_mat2.a);
-    context.draw_arrays(WebGl2RenderingContext::TRIANGLES, (CUBE_VERT_NUM as i32)*3, 24);
-
-    unsafe{
-        view.rotate(-SH_0.value[1]*3.0);
-    }
+    context.uniform_matrix4fv_with_f32_array(loc,false, &mvp_mat.a);
+    context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, shader.tri_num);
 }
 
 #[wasm_bindgen]
@@ -324,7 +373,7 @@ pub fn link_program(
 fn create_f32_buffer(
     context: &WebGl2RenderingContext,
     vertices: &[f32]
-)-> Result<(), JsValue>{
+)-> Result<web_sys::WebGlBuffer, JsValue>{
     let v_buf = context.create_buffer().ok_or("failed to create buffer")?;
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&v_buf));
 
@@ -337,7 +386,7 @@ fn create_f32_buffer(
             WebGl2RenderingContext::STATIC_DRAW,
         );
     }
-    Ok(())
+    Ok(v_buf)
 }
 
 // color ------------------------------------------------------------------------
@@ -345,7 +394,7 @@ fn create_f32_buffer(
 fn create_u8_buffer(
     context: &WebGl2RenderingContext,
     colors: &[u8]
-)-> Result<(), JsValue>{
+)-> Result<web_sys::WebGlBuffer, JsValue>{
     let c_buf = context.create_buffer().ok_or("failed to create buffer")?;
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&c_buf));
     
@@ -359,10 +408,43 @@ fn create_u8_buffer(
         );
     }
     
-    Ok(())
+    Ok(c_buf)
 }
 
 //= SlideHolder ============================================================
 struct SlideHolder{
     value: [f32;8],
+}
+
+//= ShaderSet ============================================================
+const ss3_len: usize = 3;
+struct ShaderSet3{
+    gl_prog: WebGlProgram,
+    gl_buf: [web_sys::WebGlBuffer;ss3_len],
+    vertices: [js_sys::Float32Array;ss3_len],
+    atr_idx: [u32;ss3_len],
+    atr_size: [i32;ss3_len],
+    tri_num: i32
+}
+
+impl ShaderSet3{
+    fn set_prog(&self, context: &WebGl2RenderingContext){
+        context.use_program(Some(&self.gl_prog));
+        for idx in 0..3 {
+            context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.gl_buf[idx]));
+
+            context.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &self.vertices[idx],
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+
+            context.enable_vertex_attrib_array(self.atr_idx[idx]);        
+            context.vertex_attrib_pointer_with_i32(
+                self.atr_idx[idx],
+                self.atr_size[idx],
+                WebGl2RenderingContext::FLOAT, false, 0, 0
+            );
+        }
+    }
 }

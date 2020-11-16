@@ -26,3 +26,6 @@ features = [
   'Node',
   'Window',
 ]
+
+[build]
+rustflags = ["-A", "unused_assignments"]

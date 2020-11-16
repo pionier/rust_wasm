@@ -1,47 +1,4 @@
 
-//= データ定義 ====================================================================
-/* 正八胞体 : 現時点ではまだ四角錘１つ */
-const CUBE4_VTX_NUM: usize = 5;
-static CUBE4_VTX: [Vec4D; CUBE4_VTX_NUM] = [
-    Vec4D{ x:1.0, y:-1.0, z:1.0, h:0.0 },   // 最初の四角錘(Zero4)
-    Vec4D{ x:1.0, y:1.0, z:1.0, h:0.0 },
-    Vec4D{ x:-1.0, y:1.0, z:1.0, h:0.0 },
-    Vec4D{ x:1.0, y:1.0, z:-1.0, h:0.0 },
-    Vec4D{ x:0.0, y:0.0, z:0.0, h:-1.0 },
-];
-
-const CUBE4_VTX_INDEX_NUM: usize = 5;
-static CUBE4_VTX_INDEX: [usize; CUBE4_VTX_INDEX_NUM] = [
-    0,1,2,3,4
-];
-
-const CUBE4_NOR_NUM: usize = 5;
-static CUBE4_NOR: [Vec4D; CUBE4_NOR_NUM] = [
-    Vec4D{ x:0.0, y:0.1, z:0.2, h:0.3 },
-    Vec4D{ x:3.0, y:0.1, z:0.2, h:0.3 },
-    Vec4D{ x:0.0, y:3.1, z:0.2, h:0.3 },
-    Vec4D{ x:0.0, y:0.1, z:3.2, h:0.3 },
-    Vec4D{ x:0.0, y:0.1, z:0.2, h:3.3 },
-];
-
-const CUBE4_NOR_INDEX_NUM: usize = 5;
-static CUBE4_NOR_INDEX: [usize; CUBE4_NOR_INDEX_NUM] = [
-    0,1,2,3,4
-];
-
-const CUBE4_COL_NUM: usize = 5;
-static CUBE4_COL: [Color<u8>; CUBE4_COL_NUM] = [
-    Color{ r:0x80, g:0x80, b:0x80, a:0x80 },
-    Color{ r:0x80, g:0x00, b:0x00, a:0x01 },
-    Color{ r:0xff, g:0xff, b:0xff, a:0xff },
-    Color{ r:0x0f, g:0x0f, b:0x0f, a:0x0f },
-    Color{ r:0xf0, g:0xf0, b:0xf0, a:0xf0 },
-];
-
-const CUBE4_COL_INDEX_NUM: usize = 5;
-static CUBE4_COL_INDEX: [usize; CUBE4_COL_INDEX_NUM] = [
-    0,1,2,3,4
-];
 
 //=====================================================================use std::ops::Add;
 use std::ops::Add;
@@ -654,12 +611,6 @@ impl Views{
         }
         let ret = Mat4D{
             a: [
-/*
-                vx.x, vx.y, vx.z, -(vx.x*self.eye.x + vx.y*self.eye.y + vx.z*self.eye.z),
-                vy.x, vy.y, vy.z, -(vy.x*self.eye.x + vy.y*self.eye.y + vy.z*self.eye.z),
-                vz.x, vz.y, vz.z, -(vz.x*self.eye.x + vz.y*self.eye.y + vz.z*self.eye.z),
-                0.0,  0.0,  0.0,  1.0
-*/
                 vx.x, vy.x, vz.x, 0.0,
                 vx.y, vy.y, vz.y, 0.0,
                 vx.z, vy.z, vz.z, 0.0,
@@ -674,12 +625,17 @@ impl Views{
     pub fn rotate( &mut self, angle: f32 ){
         let sin_x = angle.sin();
         let cos_x = angle.cos();
-//        let eye_x = (-self.look_at.x + self.eye.x) * cos_x - (-self.look_at.z + self.eye.z) * sin_x;
         let eye_x = self.eye_base.x * cos_x - self.eye_base.z * sin_x;
-//        let eye_z = (-self.look_at.x + self.eye.x) * sin_x + (-self.look_at.z + self.eye.z) * cos_x;
         let eye_z = self.eye_base.x * sin_x + self.eye_base.z * cos_x;
         self.eye.x = self.look_at.x+eye_x;
         self.eye.z = self.look_at.z+eye_z;
+    }
+
+    // Generate View Matrix * Perspective Matrix
+    pub fn gen_view_proj( &self, cnv_rate: f32 ) -> Mat4D {
+        let v_mat = self.look_at(&Vec3D{ x:0.0, y:1.0, z:0.0});
+        let proj_mat = Mat4D::perspective(45.0, cnv_rate, 0.1, 100.0);
+        &v_mat*&proj_mat
     }
 }
 
@@ -700,7 +656,7 @@ pub struct TriPylam{
     pub normal: Vec4D
 }
 
-enum DivPattern{
+pub enum DivPattern{
     Zero4,  // 4点とも3D空間に含まれる：Triangleを4つ作成
     Zero3,  // 3点が３D空間に含まれる
     Zero2,  // 2点が３D空間に含まれる
@@ -713,19 +669,19 @@ enum DivPattern{
 impl TriPylam{
     const VERTEX_NUM: usize = 4;
 
-    fn new( v0: &Vertex4D, v1: &Vertex4D, v2: &Vertex4D, v3: &Vertex4D, nor: &Vec4D ) -> TriPylam {
+    pub fn new( v0: &Vertex4D, v1: &Vertex4D, v2: &Vertex4D, v3: &Vertex4D, nor: &Vec4D ) -> TriPylam {
         let plm = TriPylam{
             vertex: [*v0,*v1,*v2,*v3],
             normal: *nor
         };
         plm
     }
-    fn new_with_center( v0: &Vertex4D, v1: &Vertex4D, v2: &Vertex4D, v3: &Vertex4D, center: &Vec4D ) -> Option<TriPylam> {
+    pub fn new_with_center( v0: &Vertex4D, v1: &Vertex4D, v2: &Vertex4D, v3: &Vertex4D, center: &Vec4D ) -> Option<TriPylam> {
         let nor = calc_normal4d( &v0.vertex, &v1.vertex, &v2.vertex, &v3.vertex, center )?;
         let plm = TriPylam::new(v0, v1, v2, v3, &nor);
         Some(plm)
     }
-    fn check_div_pattern(&self, hpos: f32) -> (DivPattern, &Vertex4D, &Vertex4D, &Vertex4D, &Vertex4D) {
+    pub fn check_div_pattern(&self, hpos: f32) -> (DivPattern, &Vertex4D, &Vertex4D, &Vertex4D, &Vertex4D) {
         let mut pattern = AXIS_XY;
         let mut vtx0: &Vertex4D = &self.vertex[0];
         let mut vtx1: &Vertex4D = &self.vertex[1];
@@ -738,10 +694,10 @@ impl TriPylam{
             get_sign(vtx2.vertex.h-hpos),
             get_sign(vtx3.vertex.h-hpos)
         );
-        let zero_num: i32   = if( zero_pattern.0 == 0 ){1}else{0}
-                            + if( zero_pattern.1 == 0 ){1}else{0}
-                            + if( zero_pattern.2 == 0 ){1}else{0}
-                            + if( zero_pattern.3 == 0 ){1}else{0};
+        let zero_num: i32   = if zero_pattern.0 == 0 {1}else{0}
+                            + if zero_pattern.1 == 0 {1}else{0}
+                            + if zero_pattern.2 == 0 {1}else{0}
+                            + if zero_pattern.3 == 0 {1}else{0};
         let pat_sum = (zero_pattern.0 + zero_pattern.1 +zero_pattern.2 +zero_pattern.3).abs();
 
         match (zero_num, pat_sum) {
@@ -791,7 +747,7 @@ impl TriPylam{
         }
     }
 
-    fn create_triangle( self, hpos:f32, pat: (DivPattern,&Vertex4D,&Vertex4D,&Vertex4D,&Vertex4D) ) -> Triangle {
+    pub fn create_triangle( self, hpos:f32, pat: (DivPattern,&Vertex4D,&Vertex4D,&Vertex4D,&Vertex4D) ) -> Triangle {
         let mut trg: Triangle = Default::default();
         match pat.0 {
             DivPattern::Zero3 => {
@@ -925,13 +881,13 @@ fn calc_normal4d ( vtx0: &Vec4D, vtx1: &Vec4D, vtx2: &Vec4D, vtx3: &Vec4D, cente
     // 後処理：正負の方向を定める
     let mut dir = vtx0 - center;
     // 長さ0でない法線基準ベクトルを得る
-    if( dir.is_zero() ){
+    if dir.is_zero() {
         dir = vtx1 - center;
-        if( dir.is_zero() ){
+        if dir.is_zero() {
             dir = vtx2 - center;
-            if( dir.is_zero() ){
+            if dir.is_zero() {
                 dir = vtx3 - center;
-                if( dir.is_zero() ){
+                if dir.is_zero() {
                     return None;
                 }
             }
@@ -939,7 +895,7 @@ fn calc_normal4d ( vtx0: &Vec4D, vtx1: &Vec4D, vtx2: &Vec4D, vtx3: &Vec4D, cente
     }
 
 	let sign = inner_product4d( &nor, &dir );
-    if( sign < -std::f32::EPSILON ){
+    if sign < -std::f32::EPSILON {
         // 方向反転
 		nor = -nor;
 	}else
@@ -1060,7 +1016,7 @@ pub fn assemble_triangle_3d(
 ) -> usize {
 
     // ぬるぽチェック
-    if((v_ptr==0)||(n_ptr==0)||(c_ptr==0)||(vi_ptr==0)||(ni_ptr==0)||(ci_ptr==0)||(mtx4==0)){
+    if (v_ptr==0)||(n_ptr==0)||(c_ptr==0)||(vi_ptr==0)||(ni_ptr==0)||(ci_ptr==0)||(mtx4==0) {
 //        return 0;
     }
 
@@ -1214,7 +1170,7 @@ pub fn assemble_triangle_3d(
         }
 
         idx += INDEX_UNIT;
-        c_cnt += (INDEX_UNIT-1);
+        c_cnt += INDEX_UNIT-1;
     }
     
     unsafe{
@@ -1441,7 +1397,7 @@ pub fn draw_triangles(
         }
 
         idx += INDEX_UNIT;
-        c_cnt += (INDEX_UNIT-1);
+        c_cnt += INDEX_UNIT-1;
     }
     
     unsafe{
@@ -1455,79 +1411,4 @@ pub fn draw_triangles(
     }
 
     tri_buf.len()
-}
-
-//= generate_tiled_floor ====================================================================
-pub fn generate_tiled_floor(leng: f32, tnum: i32, color0: Color<u8>, color1: Color<u8>) -> (Vec<f32>,Vec<f32>,Vec<u8>) {
-    let tlg = leng*0.5;
-    let unit_pos = [
-        -tlg, -2.0, -tlg,
-        -tlg, -2.0,  tlg,
-         tlg, -2.0,  tlg,
-        -tlg, -2.0, -tlg,
-         tlg, -2.0,  tlg,
-         tlg, -2.0, -tlg,
-    ];
-    let unit_pos_len = 6;
-	let mut offs_x = tlg*((tnum-1) as f32 );
-    let mut offs_z = offs_x;
-    let tnum1 = (tnum-1) as f32;
-    let mut vtx_array: Vec<f32> = Vec::new();
-    let mut nor_array: Vec<f32> = Vec::new();
-    let mut col_array: Vec<u8> = Vec::new();
-
-	// 黒のプレート
-	for clmn in 0..tnum {
-		offs_x = tlg*tnum1;
-		for row in 0..tnum {
-			if ((row+clmn) & 0x01) == 0x01 {
-				offs_x -= leng;
-				continue;
-			}
-			for idx in 0..unit_pos_len {
-                let ii = idx*3;
-                vtx_array.push(unit_pos[ii]+offs_x);
-                vtx_array.push(unit_pos[ii+1]);
-                vtx_array.push(unit_pos[ii+2]+offs_z);
-                nor_array.push(0.0);
-                nor_array.push(1.0);
-                nor_array.push(0.0);
-                col_array.push(color0.r);
-                col_array.push(color0.g);
-                col_array.push(color0.b);
-                col_array.push(color0.a);
-            }
-			offs_x -= leng;
-		}
-		offs_z -= leng;
-    }
-    
-    // 白のプレート
-    offs_z = tlg*((tnum-1)as f32);
-	for clmn in 0..tnum {
-		offs_x = tlg*tnum1;
-		for row in 0..tnum {
-			if ((row+clmn) & 0x01) == 0 {
-				offs_x -= leng;
-				continue;
-			}
-			for idx in 0..unit_pos_len {
-                let ii = idx*3;
-                vtx_array.push(unit_pos[ii]+offs_x);
-                vtx_array.push(unit_pos[ii+1]);
-                vtx_array.push(unit_pos[ii+2]+offs_z);
-                nor_array.push(0.0);
-                nor_array.push(1.0);
-                nor_array.push(0.0);
-                col_array.push(color1.r);
-                col_array.push(color1.g);
-                col_array.push(color1.b);
-                col_array.push(color1.a);
-            }
-			offs_x -= leng;
-		}
-		offs_z -= leng;
-    }
-
-    (vtx_array, nor_array, col_array)
 }
