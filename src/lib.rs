@@ -51,13 +51,13 @@ macro_rules! console_log {
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
-
+/*
 fn request_animation_frame(f: &Closure<dyn FnMut()>) {
     window()
         .request_animation_frame(f.as_ref().unchecked_ref())
         .expect("should register `requestAnimationFrame` OK");
 }
-
+*/
 fn document() -> web_sys::Document {
     window()
         .document()
@@ -93,7 +93,7 @@ pub fn main() -> Result<(), JsValue> {
         out   vec4 vColor;
         void main(){
             gl_Position = mMatrix * position;
-            vNormal = mMatrix * normal;
+            vNormal = normal;
             vColor = color;
         }
         "#,
@@ -107,9 +107,9 @@ pub fn main() -> Result<(), JsValue> {
         in	vec4 vColor;
         out vec4 oFragColor;
         void main() {
-            vec4 nor = normalize(vNormal);
-            mediump float rate = clamp( dot(nor, vec4(0.0,-1.0,0.0,0.0)), 0.5, 1.0 );
-            oFragColor = vColor*rate;
+            vec3 nor3 = normalize(vNormal.xyz);
+            float rate = clamp( dot(nor3, vec3(0.0,1.0,0.0)), 0.0, 1.0 )*0.3 + 0.7;
+            oFragColor = vec4(vColor.r*rate, vColor.g*rate, vColor.b*rate, vColor.a);
         }
         "#,
     )?;
@@ -122,11 +122,11 @@ pub fn main() -> Result<(), JsValue> {
         layout(location = 0) in vec4 position;
         layout(location = 1) in vec4 normal;
         layout(location = 2) in vec4 color;
-        uniform   mat4 mMatrix;
+        uniform   mat4 mMatrix2;
         out   vec4 vNormal;
         out   vec4 vColor;
         void main(){
-            gl_Position = mMatrix * position;
+            gl_Position = mMatrix2 * position;
             vNormal = normal;
             vColor = color;
         }
@@ -149,11 +149,11 @@ pub fn main() -> Result<(), JsValue> {
     )?;
     let program2 = link_program(&context, &vert_shader2, &frag_shader2)?;
 
-//    let tsrct = shapes::generate_tesseract();
+    let tsrct = shapes::generate_tesseract(1.0);
 
     let col0 = fdw::Color::<u8>{ r:0,g:0,b:0,a:255};
     let col1 = fdw::Color::<u8>{ r:255,g:255,b:255,a:255};
-    let tile_num = 4;
+    let tile_num = 16;
     let tile_triangle = tile_num*tile_num*6;
     let tiled_floor = shapes::generate_tiled_floor(1.0, tile_num, col0, col1);
     let vtx_vec = tiled_floor.0;
@@ -165,11 +165,19 @@ pub fn main() -> Result<(), JsValue> {
     }
 
     // Objects ------------------------------------------------------------------------
-    let mut v0: js_sys::Float32Array;
-    let mut v1: js_sys::Float32Array;
-    let mut v2: js_sys::Float32Array;
-
+    const CUBE4_SIZE :usize = 128;
+    let mut vtx_buf: Vec<f32> = Vec::with_capacity(CUBE4_SIZE);
+    let mut nor_buf: Vec<f32> = Vec::with_capacity(CUBE4_SIZE);
+    let mut col_buf: Vec<f32> = Vec::with_capacity(CUBE4_SIZE);
+    
     // Cube ------------------------------------------------------------------------
+    vtx_buf.extend_from_slice(&CUBE_VERT);
+    nor_buf.extend_from_slice(&CUBE_NOR);
+    col_buf.extend_from_slice(&CUBE_COL);
+    
+    let v0: js_sys::Float32Array;
+    let v1: js_sys::Float32Array;
+    let v2: js_sys::Float32Array;
     let v_buf = create_f32_buffer(&context, &CUBE_VERT)?;
     let n_buf = create_f32_buffer(&context, &CUBE_NOR)?;
     let c_buf = create_f32_buffer(&context, &CUBE_COL)?;
@@ -179,8 +187,11 @@ pub fn main() -> Result<(), JsValue> {
         v1 = js_sys::Float32Array::view(&CUBE_NOR);
         v2 = js_sys::Float32Array::view(&CUBE_COL);
     }
+
     let shader1 = ShaderSet3{
+        culling: false,
         gl_prog: program,
+        vtx_buf: [vtx_buf, nor_buf, col_buf],
         gl_buf: [ v_buf, n_buf, c_buf ],
         vertices: [ v0, v1, v2 ],
         atr_idx: [ 0,1,2 ],
@@ -189,19 +200,24 @@ pub fn main() -> Result<(), JsValue> {
     };
 
     // Floor ------------------------------------------------------------------------
-    let v_buf = create_f32_buffer(&context, &vtx_vec)?;
-    let n_buf = create_f32_buffer(&context, &nor_vec)?;
-    let c_buf = create_f32_buffer(&context, &col_vec)?;
+    let v_buf2 = create_f32_buffer(&context, &vtx_vec)?;
+    let n_buf2 = create_f32_buffer(&context, &nor_vec)?;
+    let c_buf2 = create_f32_buffer(&context, &col_vec)?;
 
+    let v00: js_sys::Float32Array;
+    let v01: js_sys::Float32Array;
+    let v02: js_sys::Float32Array;
     unsafe{
-        v0 = js_sys::Float32Array::view(&vtx_vec);
-        v1 = js_sys::Float32Array::view(&nor_vec);
-        v2 = js_sys::Float32Array::view(&col_vec);
+        v00 = js_sys::Float32Array::view(&vtx_vec);
+        v01 = js_sys::Float32Array::view(&nor_vec);
+        v02 = js_sys::Float32Array::view(&col_vec);
     }
     let shader2 = ShaderSet3{
+        culling: true,
         gl_prog: program2,
-        gl_buf: [ v_buf, n_buf, c_buf ],
-        vertices: [ v0, v1, v2 ],
+        vtx_buf: [vtx_vec,nor_vec,col_vec],
+        gl_buf: [ v_buf2, n_buf2, c_buf2 ],
+        vertices: [ v00, v01, v02 ],
         atr_idx: [ 0,1,2 ],
         atr_size: [3,3,4],
         tri_num: tile_triangle
@@ -211,13 +227,6 @@ pub fn main() -> Result<(), JsValue> {
     context.clear_color(0.8, 0.8, 1.0, 1.0);
     context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
     
-    // Views ---------------------------------------------------------------------
-    let mut view_pos = fdw::Views{
-        eye:      fdw::Vec3D{ x:0.0, y:2.0, z:6.0 },
-        look_at:  fdw::Vec3D{ x:0.0, y:0.0, z:-2.0 },
-        eye_base: fdw::Vec3D{ x:0.0, y:2.0, z:6.0 },
-    };
-
     // light ---------------------------------------------------------------------
     let light0 = fdw::Light{
         position:   fdw::Vec3D{ x:0.0, y:20.0, z:0.0 },
@@ -238,75 +247,143 @@ pub fn main() -> Result<(), JsValue> {
     val.set_inner_html("Hello from Rust!");
     body.append_child(&val)?;
 
-    let f = Rc::new(RefCell::new(None));
-    let g = f.clone();
+    let closure_captured = Rc::new(RefCell::new(None));
+    let closure_cloned = Rc::clone(&closure_captured);
+    let main_loop_rc = Rc::new(RefCell::new(MainLoop::new(context, canvas_rate, tsrct, shader1, shader2)));
 
-    let mut i = 0;
-    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-/*
-        if i > 30000 {
-            //body0().set_text_content(Some("All done!"));
-            val.set_text_content(Some("All done!"));
-
-            // Drop our handle to this closure so that it will get cleaned
-            // up once we return.
-            let _ = f.borrow_mut().take();
-            return;
-        }
-*/
-        context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
-
-        unsafe{
-            view_pos.look_at.x = SH_0.value[2]*2.0;
-            view_pos.look_at.y = SH_0.value[3]*2.0;
-            view_pos.look_at.z = -SH_0.value[4]*2.0;
-        }
-        let vp_mat = view_pos.gen_view_proj(canvas_rate);
-
-        let mut rx = 0.0;
-        let mut ry = 0.0;
-        let mut rz = 0.0;
-        unsafe{
-            rx = SH_0.value[5]*2.0;
-            ry = SH_0.value[6]*2.0;
-            rz = SH_0.value[7]*2.0;
-        }
-    
-        let mdl_mat = fdw::Mat4D::identity();
-        let mx = fdw::Mat4D::rotate(rx,0);
-        let my = fdw::Mat4D::rotate(ry,1);
-        let mz = fdw::Mat4D::rotate(rz,2);
-        let m_mat = &vp_mat*&mdl_mat;
-        let m_mat = &mx*&m_mat;
-        let m_mat = &my*&m_mat; 
-        let mvp_mat = &mz*&m_mat; 
-    
-        // Cube
-        draw_scene(&context, &shader1, &mvp_mat);
-        // Floor
-        draw_scene(&context, &shader2, &vp_mat);
-
-        // Set the body's text content to how many times this
-        // requestAnimationFrame callback has fired.
-        i += 1;
-        let text = format!("requestAnimationFrame has been called {} times.", i);
-        val.set_text_content(Some(&text));
-
-        // Schedule ourself for another requestAnimationFrame callback.
-        request_animation_frame(f.borrow().as_ref().unwrap());
-    }) as Box<dyn FnMut()>));
-
-    request_animation_frame(g.borrow().as_ref().unwrap());
+    {   // setup requestAnimationFrame Loop
+        let app_for_closure = Rc::clone(&main_loop_rc);
+        closure_cloned.replace(Some(Closure::wrap(Box::new(move |time: f64|{
+            app_for_closure.borrow_mut().on_animation_frame(time);
+            request_animation_frame(closure_captured.borrow().as_ref().unwrap());
+        }) as Box<dyn FnMut(f64)>)));
+        request_animation_frame(closure_cloned.borrow().as_ref().unwrap());
+    }
 
     Ok(())
 }
 
+fn request_animation_frame(f: &Closure<dyn FnMut(f64)>){
+    window()
+        .request_animation_frame(f.as_ref().unchecked_ref())
+        .expect("should register 'requestAnimationFrame' OK");
+}
+
+pub struct MainLoop {
+    pub context: WebGl2RenderingContext,
+    pub canvas_rate: f32,
+    pub tsrct: Vec<fdw::TriPylam>,
+    pub is_changed: bool,
+    pub shader1: ShaderSet3,
+    pub shader2: ShaderSet3,
+    pub old_sh: [f32;8]
+}
+
+impl MainLoop {
+    pub fn new(context: WebGl2RenderingContext, canvas_rate: f32, tsrct: Vec<fdw::TriPylam>, shader1: ShaderSet3, shader2: ShaderSet3) -> MainLoop {
+        MainLoop{
+            context: context,
+            canvas_rate: canvas_rate,
+            tsrct: tsrct,
+            is_changed: false,
+            shader1: shader1,
+            shader2: shader2,
+            old_sh: [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
+        }
+    }
+
+    pub fn on_animation_frame(&mut self, time: f64){
+        
+        // 変化がなければ何もしない
+        if !self.check_change() {
+            return;
+        }
+        // 新しい条件を記録
+        unsafe{
+            for idx in 0..8 {
+                self.old_sh[idx] = SH_0.value[idx];
+            }
+        }
+
+        // 画面クリア
+        self.context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
+
+        // 視点の設定
+        let mut view_pos = fdw::Views::create(2.0, 10.0);
+        unsafe{
+            view_pos.rotate( SH_0.value[1]*3.0 );
+        }
+        let vp_mat = view_pos.gen_view_proj(self.canvas_rate);
+        
+        // オブジェクトの座標(平行移動)
+        let pos_vec;
+        unsafe{
+            pos_vec = fdw::Vec4D{ x:0.0, y:0.0, z:0.0, h:SH_0.value[0]*2.0 };
+        }
+
+        // オブジェクトの回転
+        let r_xy;
+        let r_yz;
+        let r_zx;
+        let r_zh;
+        let r_hx;
+        let r_yh;
+        unsafe{
+            r_xy = SH_0.value[2]*3.0;
+            r_yz = SH_0.value[3]*3.0;
+            r_zx = SH_0.value[4]*3.0;
+            r_yh = SH_0.value[5]*3.0;
+            r_zh = SH_0.value[6]*3.0;
+            r_hx = SH_0.value[7]*3.0;
+        }
+        // 回転行列の設定
+        let mxy = fdw::Mat4D::rotate(r_xy,0);
+        let myz = fdw::Mat4D::rotate(r_yz,1);
+        let mzx = fdw::Mat4D::rotate(r_zx,2);
+        let myh = fdw::Mat4D::rotate(r_yh,3);
+        let mzh = fdw::Mat4D::rotate(r_zh,4);
+        let mhx = fdw::Mat4D::rotate(r_hx,5);
+        let rot_mat = mxy.mul_r(&myz).mul_r(&mzx).mul_r(&mhx).mul_r(&myh).mul_r(&mzh);
+
+        // 4D affine変換：データをバッファに詰める
+        self.shader1.make_buf(&self.context, &self.tsrct, &rot_mat, &pos_vec);
+        
+        // 描画：視点変換
+        draw_scene(&self.context, &self.shader1, &vp_mat, "mMatrix");
+
+        // Floor
+        draw_scene(&self.context, &self.shader2, &vp_mat, "mMatrix2");
+    }
+
+    // 変化があれば２回 true を返す
+    fn check_change(&mut self) -> bool {
+
+        for idx in 0..8 {
+            unsafe{
+                if self.old_sh[idx] != SH_0.value[idx] {
+                    self.is_changed = true;
+                    return true;
+                }
+            }
+        }
+        if self.is_changed {
+            self.is_changed = false;
+            return true;
+        }
+        false
+    }
+}
 
 #[allow(unused_assignments)]
-fn draw_scene( context: &WebGl2RenderingContext, shader: &ShaderSet3, mvp_mat: &fdw::Mat4D){
+fn draw_scene( context: &WebGl2RenderingContext, shader: &ShaderSet3, mvp_mat: &fdw::Mat4D, unif_name: &str){
 
+    if shader.culling {
+        context.enable(WebGl2RenderingContext::CULL_FACE);    
+    }else{
+        context.disable(WebGl2RenderingContext::CULL_FACE);    
+    }
     shader.set_prog(context);
-    let loc = context.get_uniform_location(&shader.gl_prog, "mMatrix").ok_or("failed to get uniform location").unwrap();
+    let loc = context.get_uniform_location(&shader.gl_prog, unif_name).ok_or("failed to get uniform location").unwrap();
     let loc = Some(&loc);
     context.uniform_matrix4fv_with_f32_array(loc,false, &mvp_mat.a);
     context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, shader.tri_num);
@@ -417,13 +494,15 @@ struct SlideHolder{
 }
 
 //= ShaderSet ============================================================
-const ss3_len: usize = 3;
-struct ShaderSet3{
+const SS3_LEN: usize = 3;
+pub struct ShaderSet3{
+    culling: bool,
     gl_prog: WebGlProgram,
-    gl_buf: [web_sys::WebGlBuffer;ss3_len],
-    vertices: [js_sys::Float32Array;ss3_len],
-    atr_idx: [u32;ss3_len],
-    atr_size: [i32;ss3_len],
+    vtx_buf: [Vec<f32>;SS3_LEN],
+    gl_buf: [web_sys::WebGlBuffer;SS3_LEN],
+    vertices: [js_sys::Float32Array;SS3_LEN],
+    atr_idx: [u32;SS3_LEN],
+    atr_size: [i32;SS3_LEN],
     tri_num: i32
 }
 
@@ -446,5 +525,34 @@ impl ShaderSet3{
                 WebGl2RenderingContext::FLOAT, false, 0, 0
             );
         }
+    }
+
+    fn make_buf(&mut self, context: &WebGl2RenderingContext, tsrct: &Vec<fdw::TriPylam>, rot_mat: &fdw::Mat4D, pos_vec: &fdw::Vec4D){
+        
+        self.gl_buf[0] = create_f32_buffer(&context, &self.vtx_buf[0]).unwrap();
+        self.gl_buf[1] = create_f32_buffer(&context, &self.vtx_buf[1]).unwrap();
+        self.gl_buf[2] = create_f32_buffer(&context, &self.vtx_buf[2]).unwrap();
+
+        unsafe{
+            self.vertices[0] = js_sys::Float32Array::view(&self.vtx_buf[0]);
+            self.vertices[1] = js_sys::Float32Array::view(&self.vtx_buf[1]);
+            self.vertices[2] = js_sys::Float32Array::view(&self.vtx_buf[2]);
+        }
+
+        let h_pos = 0.0;
+        &self.vtx_buf[0].clear();
+        &self.vtx_buf[1].clear();
+        &self.vtx_buf[2].clear();
+        for plm in tsrct{
+            let new_plm = plm.affine_transform( &rot_mat, &pos_vec );
+            new_plm.make_arrays(h_pos, &mut self.vtx_buf);
+        }
+        unsafe{
+            self.vertices[0] = js_sys::Float32Array::view(&self.vtx_buf[0]);
+            self.vertices[1] = js_sys::Float32Array::view(&self.vtx_buf[1]);
+            self.vertices[2] = js_sys::Float32Array::view(&self.vtx_buf[2]);
+        }
+
+        self.tri_num = (self.vtx_buf[0].len()*3) as i32;
     }
 }

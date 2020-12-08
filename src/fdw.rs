@@ -169,6 +169,10 @@ impl Vec4D {
     const LEN_F32: usize = 4;
     const LEN_U8: usize = Vec4D::LEN_F32*mem::size_of::<f32>();
 
+    fn mul_scalor(&self, scale: f32) -> Vec4D {
+        Vec4D{ x:self.x*scale, y:self.y*scale, z:self.z*scale, h:self.h*scale }
+    }
+
     fn calc_length(&self) -> f32 {
         (self.x.powi(2) + self.y.powi(2) + self.z.powi(2) + self.h.powi(2)).sqrt()
     }
@@ -245,6 +249,22 @@ impl Vertex4D {
         Vertex3D{
             vertex: Vec3D{ x:self.vertex.x, y:self.vertex.y, z:self.vertex.z },
             normal: Vec3D{ x:self.normal.x, y:self.normal.y, z:self.normal.z },
+            color: self.color
+        }
+    }
+
+    fn affine_transform( &self, mtx: &Mat4D, pos: &Vec4D ) -> Vertex4D {
+        Vertex4D{
+            vertex: &mtx.mul_vec(&self.vertex) + pos,
+            normal: mtx.mul_vec(&self.normal),
+            color: self.color
+        }
+    }
+
+    fn scale( &self, scale: f32 ) -> Vertex4D {
+        Vertex4D{
+            vertex: self.vertex.mul_scalor(scale),
+            normal: self.normal,
             color: self.color
         }
     }
@@ -325,6 +345,22 @@ impl Triangle {
 */
         }
     }
+
+    fn push_buffer( &self, v_array: &mut Vec<f32>, n_array: &mut Vec<f32>, c_array: &mut Vec<f32>){
+        for ii in 0..3 {
+            v_array.push(self.vertex[ii].vertex.x);
+            v_array.push(self.vertex[ii].vertex.y);
+            v_array.push(self.vertex[ii].vertex.z);
+            n_array.push(self.vertex[ii].normal.x);
+            n_array.push(self.vertex[ii].normal.y);
+            n_array.push(self.vertex[ii].normal.z);
+//            c_array.push( self.vertex[ii].color.pack_f32() );
+            c_array.push(self.vertex[ii].color.r as f32/255.0);
+            c_array.push(self.vertex[ii].color.g as f32/255.0);
+            c_array.push(self.vertex[ii].color.b as f32/255.0);
+            c_array.push(self.vertex[ii].color.a as f32/255.0);
+        }
+}
 }
 
 //= TriangleTex ============================================================
@@ -366,9 +402,9 @@ impl TriangleTex {
 const AXIS_XY: i32 = 0;
 const AXIS_YZ: i32 = 1;
 const AXIS_ZX: i32 = 2;
-const AXIS_ZH: i32 = 3;
-const AXIS_XH: i32 = 4;
-const AXIS_YH: i32 = 5;
+const AXIS_YH: i32 = 3;
+const AXIS_ZH: i32 = 4;
+const AXIS_XH: i32 = 5;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct Mat4D{
@@ -388,6 +424,9 @@ impl Mat4D {
         };
         dst
     }
+    pub fn mul_r(&self, mtx: &Mat4D) -> Mat4D {
+        self*mtx
+    }
 
     pub fn identity() -> Mat4D {
         let mut mtx = Mat4D{ a: [0.0;Mat4D::LEN_F32] };
@@ -397,7 +436,30 @@ impl Mat4D {
         mtx.a[15] = 1.0;
         mtx
     }
-
+/*
+    pub fn scale(&mut self, scale: f32) -> Mat4D {
+        let ret = Mat4D{ a:[
+                self.a[0]*scale,
+                self.a[1]*scale,
+                self.a[2]*scale,
+                self.a[3]*scale,
+                self.a[4]*scale,
+                self.a[5]*scale,
+                self.a[6]*scale,
+                self.a[7]*scale,
+                self.a[8]*scale,
+                self.a[9]*scale,
+                self.a[10]*scale,
+                self.a[11]*scale,
+                self.a[12]*scale,
+                self.a[13]*scale,
+                self.a[14]*scale,
+                self.a[15]*scale
+            ]
+        };
+        ret
+    }
+*/
     pub fn transpose(&self) -> Mat4D {
         let ret = Mat4D{ a: [
                 self.a[0], self.a[4], self.a[ 8], self.a[12], 
@@ -414,7 +476,7 @@ impl Mat4D {
         let cos_x = angle.cos();
         let sin_x = angle.sin();
         match plane {
-            AXIS_XY => {  // XY
+            AXIS_XY => {  // XY 0
                 mtx.a[0] = cos_x;
                 mtx.a[5] = cos_x;
                 mtx.a[1] = sin_x;
@@ -422,7 +484,7 @@ impl Mat4D {
                 mtx.a[10] = 1.0;
                 mtx.a[15] = 1.0;
                 },
-            AXIS_YZ => {  // YZ
+            AXIS_YZ => {  // YZ 1
                 mtx.a[0] = 1.0;
                 mtx.a[ 5] = cos_x;
                 mtx.a[10] = cos_x;
@@ -430,23 +492,23 @@ impl Mat4D {
                 mtx.a[ 9] = -sin_x;
                 mtx.a[15] = 1.0;
             },
-            AXIS_ZX => {  // ZX
+            AXIS_ZX => {  // ZX 2
                 mtx.a[ 0] = cos_x;
                 mtx.a[10] = cos_x;
-                mtx.a[8] = sin_x;
-                mtx.a[2] = -sin_x;
+                mtx.a[8] = -sin_x;
+                mtx.a[2] = sin_x;
                 mtx.a[5] = 1.0;
                 mtx.a[15] = 1.0;
                 },
-            AXIS_YH => {  // YH
+            AXIS_YH => {  // YH 3
                 mtx.a[0] = 1.0;
                 mtx.a[ 5] = cos_x;
                 mtx.a[15] = cos_x;
-                mtx.a[ 7] = -sin_x;
-                mtx.a[13] = sin_x;
+                mtx.a[ 7] = sin_x;
+                mtx.a[13] = -sin_x;
                 mtx.a[10] = 1.0;
                 },
-            AXIS_ZH => {  // ZH
+            AXIS_ZH => {  // ZH 4
                 mtx.a[0] = 1.0;
                 mtx.a[5] = 1.0;
                 mtx.a[10] = cos_x;
@@ -454,11 +516,11 @@ impl Mat4D {
                 mtx.a[11] = sin_x;
                 mtx.a[14] = -sin_x;
                 },
-            AXIS_XH => {  // HX
+            AXIS_XH => {  // HX 5
                 mtx.a[ 0] = cos_x;
                 mtx.a[15] = cos_x;
-                mtx.a[ 3] = sin_x;
-                mtx.a[12] = -sin_x;
+                mtx.a[ 3] = -sin_x;
+                mtx.a[12] = sin_x;
                 mtx.a[5] = 1.0;
                 mtx.a[10] = 1.0;
                 },
@@ -501,13 +563,6 @@ impl Mat4D {
             vy.normalize();
         }
         let ret = Mat4D{
-/*
-            a: [ vx.x, vx.y, vx.z, -(vx.x*eye.x + vx.y*eye.y + vx.z*eye.z),
-                 vy.x, vy.y, vy.z, -(vy.x*eye.x + vy.y*eye.y + vy.z*eye.z),
-                 vz.x, vz.y, vz.z, -(vz.x*eye.x + vz.y*eye.y + vz.z*eye.z),
-                 0.0,  0.0,  0.0,  1.0
-            ]
-*/
             a: [ vx.x, vy.x, vz.x, 0.0,
                  vx.y, vy.y, vz.y, 0.0,
                  vx.z, vz.y, vz.z, 0.0,
@@ -581,6 +636,15 @@ pub struct Views{
 }
 
 impl Views{
+    pub fn create(eye_height: f32, sight_len: f32) -> Views{
+        let view_pos =  Views{
+            eye:        Vec3D{ x:0.0, y:eye_height, z:sight_len },
+            look_at:    Vec3D{ x:0.0, y:0.0, z:0.0 },
+            eye_base:   Vec3D{ x:0.0, y:eye_height, z:sight_len }
+        };
+        view_pos
+    }
+
     pub fn look_at( &self, upper: &Vec3D ) -> Mat4D {
         let mut vz = Vec3D{ x:self.eye.x-self.look_at.x, y:self.eye.y-self.look_at.y, z:self.eye.z-self.look_at.z };
         if  vz.is_near_zero() {
@@ -681,12 +745,36 @@ impl TriPylam{
         let plm = TriPylam::new(v0, v1, v2, v3, &nor);
         Some(plm)
     }
-    pub fn check_div_pattern(&self, hpos: f32) -> (DivPattern, &Vertex4D, &Vertex4D, &Vertex4D, &Vertex4D) {
-        let mut pattern = AXIS_XY;
-        let mut vtx0: &Vertex4D = &self.vertex[0];
-        let mut vtx1: &Vertex4D = &self.vertex[1];
-        let mut vtx2: &Vertex4D = &self.vertex[2];
-        let mut vtx3: &Vertex4D = &self.vertex[3];
+
+    pub fn affine_transform( &self, mtx: &Mat4D, pos: &Vec4D ) -> TriPylam {
+        TriPylam{
+            vertex: [
+                self.vertex[0].affine_transform(mtx,pos),
+                self.vertex[1].affine_transform(mtx,pos),
+                self.vertex[2].affine_transform(mtx,pos),
+                self.vertex[3].affine_transform(mtx,pos)
+            ],
+            normal: mtx.mul_vec(&self.normal)
+        }
+    }
+
+    pub fn scale(&self, scale: f32) -> TriPylam {
+        TriPylam{
+            vertex: [
+                self.vertex[0].scale(scale),
+                self.vertex[1].scale(scale),
+                self.vertex[2].scale(scale),
+                self.vertex[3].scale(scale)
+            ],
+            normal: self.normal
+        }
+    }
+
+    fn check_div_pattern(&self, hpos: f32) -> (DivPattern, &Vertex4D, &Vertex4D, &Vertex4D, &Vertex4D) {
+        let vtx0: &Vertex4D = &self.vertex[0];
+        let vtx1: &Vertex4D = &self.vertex[1];
+        let vtx2: &Vertex4D = &self.vertex[2];
+        let vtx3: &Vertex4D = &self.vertex[3];
 
         let zero_pattern = (
             get_sign(vtx0.vertex.h-hpos),
@@ -747,7 +835,7 @@ impl TriPylam{
         }
     }
 
-    pub fn create_triangle( self, hpos:f32, pat: (DivPattern,&Vertex4D,&Vertex4D,&Vertex4D,&Vertex4D) ) -> Triangle {
+    fn create_triangle( self, hpos:f32, pat: (DivPattern,&Vertex4D,&Vertex4D,&Vertex4D,&Vertex4D) ) -> Triangle {
         let mut trg: Triangle = Default::default();
         match pat.0 {
             DivPattern::Zero3 => {
@@ -792,6 +880,37 @@ impl TriPylam{
         let trg2 = Triangle{ vertex: [ vtx2.shrink(), vtx3.shrink(), vtx0.shrink() ] };
         let trg3 = Triangle{ vertex: [ vtx3.shrink(), vtx0.shrink(), vtx1.shrink() ] };
         (trg0, trg1, trg2, trg3)
+    }
+
+    pub fn make_arrays( self, h_pos: f32, vtx_array: &mut [Vec<f32>;3]){
+        let mut v_array = Vec::<f32>::new();
+        let mut n_array = Vec::<f32>::new();
+        let mut c_array = Vec::<f32>::new();
+        let pattern = self.check_div_pattern( h_pos );
+        match pattern.0 {
+            DivPattern::Zero0A => {
+                let tri_pack = self.create_2triangles(h_pos, pattern.1 ,pattern.2, pattern.3, pattern.4);
+                tri_pack.0.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+                tri_pack.1.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+            },
+            DivPattern::Zero4 => {
+                let tri_pack = self.create_4triangles(pattern.1 ,pattern.2, pattern.3, pattern.4);
+                tri_pack.0.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+                tri_pack.1.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+                tri_pack.2.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+                tri_pack.3.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+            },
+            DivPattern::No => {
+                // なにもしない
+            }
+            _ => {
+                let tri_pack = self.create_triangle(h_pos, pattern);                
+                tri_pack.push_buffer(&mut v_array, &mut n_array, &mut c_array);
+            }
+        }
+        vtx_array[0].append(&mut v_array);
+        vtx_array[1].append(&mut n_array);
+        vtx_array[2].append(&mut c_array);
     }
 }
 
@@ -932,7 +1051,6 @@ fn test_calc_normal4d(){
     let center0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:-1.0 };
 
     let nor0 = calc_normal4d(&v0, &v1, &v2, &v3, &center0).unwrap();
-//    println!("Nor0: {},{},{},{}",nor0.x, nor0.y, nor0.z, nor0.h);
 
     assert!( is_near_zero(nor0.x), "Nor0.X: {}", nor0.x );
     assert!( is_near_zero(nor0.y), "Nor0.Y: {}", nor0.y );
@@ -982,433 +1100,4 @@ fn affine4d( src: &Vec<Vec4D>, rotate: &[f32;6], rot_plane: &[i32;6], offs: &Vec
         dst.push(tmp);
     }
     dst
-}
-
-//=====================================================================
-//JavaScriptから呼ばれる関数
-
-#[no_mangle]
-pub fn lerp1( v0: f32, v1: f32, rate: f32 ) -> f32 {
-    v0 + rate*( v1 - v0)
-}
-
-// バッファを作成
-#[no_mangle]
-fn make_heap_buf( cap: usize ) -> usize {
-    let mut vec_f32: Vec<f32> = Vec::with_capacity(cap);
-    vec_f32.as_mut_ptr() as usize
-}
-
-// 頂点列をアフィン変換後、三角ポリゴン列を生成
-#[no_mangle]
-pub fn assemble_triangle_3d(
-    // v:vertex, n:normal, c:color, ?i:index
-    // ptr:buffer pointer, len:buffer length
-    // mtx4: Matrix4D+Vec4(Offset)
-    v_ptr: usize, v_len: usize, // 現在の予定では、頂点は5つ組となる。最後の一つは親のセンターとなる。
-    n_ptr: usize, n_len: usize, // 現在の予定では、法線は5つ組となる。最後の一つは親の法線となる。
-    c_ptr: usize, c_len: usize,
-    vi_ptr: usize, ni_ptr: usize, ci_ptr: usize, idx_len: usize,
-    poly_type: i32, // 生成するポリゴンの法線等のタイプ。 0: 親の法線、1: 親のセンター
-    mtx4: usize,
-    hpos: f32,
-    rcv_buf: usize, buf_len: usize  // 受け取りバッファ
-) -> usize {
-
-    // ぬるぽチェック
-    if (v_ptr==0)||(n_ptr==0)||(c_ptr==0)||(vi_ptr==0)||(ni_ptr==0)||(ci_ptr==0)||(mtx4==0) {
-//        return 0;
-    }
-
-   // affine変換行列を作成
-    let mut rot4 = Mat4D::identity();
-    let mut offs: Vec4D = Default::default();
-    unsafe{
-        let mtx_ptr = mtx4 as *mut f32;
-        let mtx_slice: &[f32] = std::slice::from_raw_parts(mtx_ptr, Mat4D::LEN_U8+Vec4D::LEN_U8);
-        println!("Mtx: ");
-        for x in 0..Mat4D::LEN_F32{
-            rot4.a[x] = mtx_slice[x];
-               print!("{}", rot4.a[x]);
-        }
-        offs.x = mtx_slice[Mat4D::LEN_F32];
-        offs.y = mtx_slice[Mat4D::LEN_F32+1];
-        offs.z = mtx_slice[Mat4D::LEN_F32+2];
-        offs.h = mtx_slice[Mat4D::LEN_F32+3];
-        println!("\r\nOffs: {},{},{},{}",offs.x,offs.y,offs.z,offs.h);
-    }
-    // インデックスを読込み
-    let mut v_idx: Vec<u16> = Vec::with_capacity(idx_len);
-    let mut n_idx: Vec<u16> = Vec::with_capacity(idx_len);
-    let mut c_idx: Vec<u16> = Vec::with_capacity(idx_len);
-    unsafe{
-        let v_idx_ptr = vi_ptr as *const u16;
-        let vi_slice: &[u16] = std::slice::from_raw_parts(v_idx_ptr, idx_len);
-        let n_idx_ptr = ni_ptr as *const u16;
-        let ni_slice: &[u16] = std::slice::from_raw_parts(n_idx_ptr, idx_len);
-        let c_idx_ptr = ci_ptr as *const u16;
-        let ci_slice: &[u16] = std::slice::from_raw_parts(c_idx_ptr, idx_len);
-        for x in 0..idx_len {
-            &v_idx.push(vi_slice[x]);
-            &n_idx.push(ni_slice[x]);
-            &c_idx.push(ci_slice[x]);
-        }
-    }
-    // 頂点情報を読込み
-    let mut v_buf: Vec<f32> = Vec::with_capacity(v_len);
-    let mut n_buf: Vec<f32> = Vec::with_capacity(n_len);
-    let mut c_buf: Vec<u32> = Vec::with_capacity(c_len);
-    unsafe{
-        let vbf_ptr = v_ptr as *const f32;
-        let vbf_slice: &[f32] = std::slice::from_raw_parts(vbf_ptr, v_len);
-        let nbf_ptr = n_ptr as *const f32;
-        let nbf_slice: &[f32] = std::slice::from_raw_parts(nbf_ptr, n_len);
-        let cbf_ptr = c_ptr as *const u32;
-        let cbf_slice: &[u32] = std::slice::from_raw_parts(cbf_ptr, c_len);
-        for x in 0..v_len {
-            &v_buf.push(vbf_slice[x]);
-        }
-        for x in 0..n_len {
-            &n_buf.push(nbf_slice[x]);
-        }
-        for x in 0..c_len {
-            &c_buf.push(cbf_slice[x]);
-        }
-    }
-
-    // 出力用バッファを用意
-    let mut tri_buf: Vec<f32> = Vec::with_capacity(idx_len);
-
-    // 4面体を形成 → 3角形を形成 → バッファに放り込む
-    let mut idx = 0;
-    let mut c_cnt = 0;
-    const INDEX_UNIT: usize = 5;
-    let mut item_count = 0;
-    while idx < idx_len {
-        //Vertexを4つ作り、アフィン変換を行い、しかる後四面体を作る
-//        let mut vtx = [Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };4];
-//        let mut nor = [Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };4];
-//        let mut col = [Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };4];
-        let mut ver: [Vertex4D;TriPylam::VERTEX_NUM] = [ Default::default();TriPylam::VERTEX_NUM];
-        print!("\r\n");
-        for ii in 0..TriPylam::VERTEX_NUM{
-            let idx_base = idx+ii;
-            let v_base = v_idx[idx_base] as usize*mem::size_of::<i32>();
-            let v = Vec4D{ x:v_buf[v_base], y:v_buf[v_base+1], z:v_buf[v_base+2], h:v_buf[v_base+3] };
-            ver[ii].vertex = &rot4.mul_vec(&v) + &offs;
-            
-            let n_base = n_idx[idx_base] as usize*mem::size_of::<i32>();
-            let n = Vec4D{ x:n_buf[n_base], y:n_buf[n_base+1], z:n_buf[n_base+2], h:n_buf[n_base+3] };
-            ver[ii].normal = rot4.mul_vec(&n);
-
-            let c_base = c_idx[c_cnt+ii] as usize;
-            let c = c_buf[c_base];
-            ver[ii].color.r = ((&c>>24)&0xff) as u8;
-            ver[ii].color.g = ((&c>>16)&0xff) as u8;
-            ver[ii].color.b = ((&c>> 8)&0xff) as u8;
-            ver[ii].color.a = ((&c    )&0xff) as u8;
-        }
-        let mut plm: TriPylam = Default::default();
-        match poly_type {
-            0 => {  // normalをそのまま利用
-                //let parent_normal = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };    // 親を持ってこないといけない
-                let v_base = v_idx[idx+4] as usize;
-                let v = Vec4D{ x:v_buf[v_base], y:v_buf[v_base+1], z:v_buf[v_base+2], h:v_buf[v_base+3] };
-                let nor = &rot4.mul_vec(&v);
-                plm = TriPylam::new( &ver[0], &ver[1], &ver[2], &ver[3], &nor );
-            },
-            1 => {  // centerからnormalを生成
-                //let parent_normal = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };    // センターを持ってこないといけない
-                let v_base = v_idx[idx+4] as usize;
-                let v = Vec4D{ x:v_buf[v_base], y:v_buf[v_base+1], z:v_buf[v_base+2], h:v_buf[v_base+3] };
-                let center = &rot4.mul_vec(&v) + &offs;
-                plm = TriPylam::new_with_center( &ver[0], &ver[1], &ver[2], &ver[3], &center ).unwrap_or_default();
-            },
-            _ => {  // その他
-                // plm = Default::default();
-            }
-        }
-        let check_pattern = plm.check_div_pattern(hpos);
-        let mut triangle: Triangle = Default::default();
-        match check_pattern.0 {
-            DivPattern::Zero0A => {
-                let tri_pack = plm.create_2triangles( hpos, check_pattern.1, check_pattern.2, check_pattern.3, check_pattern.4 );
-                tri_pack.0.decompose(&mut tri_buf);
-                tri_pack.1.decompose(&mut tri_buf);
-                item_count += 2;
-                println!("CheckPat: Zero0A");
-            },
-            DivPattern::Zero4 => {
-                let tri_pack = plm.create_4triangles( check_pattern.1, check_pattern.2, check_pattern.3, check_pattern.4 );
-                tri_pack.0.decompose(&mut tri_buf);
-                tri_pack.1.decompose(&mut tri_buf);
-                tri_pack.2.decompose(&mut tri_buf);
-                tri_pack.3.decompose(&mut tri_buf);
-/*
-                println!("Tri0: {},{},{}", tri_pack.0.vertex[0].vertex.x, tri_pack.0.vertex[0].vertex.y, tri_pack.0.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.0.vertex[1].vertex.x, tri_pack.0.vertex[1].vertex.y, tri_pack.0.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.0.vertex[2].vertex.x, tri_pack.0.vertex[2].vertex.y, tri_pack.0.vertex[2].vertex.z,);
-                println!("Tri1: {},{},{}", tri_pack.1.vertex[0].vertex.x, tri_pack.1.vertex[0].vertex.y, tri_pack.1.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.1.vertex[1].vertex.x, tri_pack.1.vertex[1].vertex.y, tri_pack.1.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.1.vertex[2].vertex.x, tri_pack.1.vertex[2].vertex.y, tri_pack.1.vertex[2].vertex.z,);
-                println!("Tri2: {},{},{}", tri_pack.2.vertex[0].vertex.x, tri_pack.2.vertex[0].vertex.y, tri_pack.2.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.2.vertex[1].vertex.x, tri_pack.2.vertex[1].vertex.y, tri_pack.2.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.2.vertex[2].vertex.x, tri_pack.2.vertex[2].vertex.y, tri_pack.2.vertex[2].vertex.z,);
-                println!("Tri3: {},{},{}", tri_pack.3.vertex[0].vertex.x, tri_pack.3.vertex[0].vertex.y, tri_pack.3.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.3.vertex[1].vertex.x, tri_pack.3.vertex[1].vertex.y, tri_pack.3.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.3.vertex[2].vertex.x, tri_pack.3.vertex[2].vertex.y, tri_pack.3.vertex[2].vertex.z,);
-*/
-                item_count += 4;
-                println!("CheckPat: Zero04");
-            },
-            _ => {
-                triangle = plm.create_triangle(hpos, check_pattern);
-                triangle.decompose(&mut tri_buf);
-                item_count += 1;
-                println!("CheckPat: Solo");
-            }
-        }
-
-        idx += INDEX_UNIT;
-        c_cnt += INDEX_UNIT-1;
-    }
-    
-    unsafe{
-        let rcv_ptr = rcv_buf as *mut f32;
-        let rcv_slice: &mut [f32] = std::slice::from_raw_parts_mut(rcv_ptr, buf_len);
-        let loop_size = if tri_buf.len() < buf_len { tri_buf.len() }else{ buf_len };
-        println!("LoopSize: {}, TriBuf: {}, BufLen: {}", loop_size, tri_buf.len(), buf_len);
-        for x in 0..loop_size{
-            rcv_slice[x] = tri_buf[x];
-        }
-
-
-    }
-
-    tri_buf.len()
-}
-
-#[test]
-fn test_look_at(){
-    let eye_position = Vec3D{ x:0.0, y:2.0, z:6.0 };
-    let look_at = Vec3D{ x:0.0, y:0.0, z:-4.0 };
-
-    let v_mat = Mat4D::look_at(&eye_position, &look_at, &Vec3D{ x:0.0, y:1.0, z:0.0 });
-    println!("Mat:");
-    println!("{},{},{},{},",v_mat.a[ 0],v_mat.a[ 1],v_mat.a[ 2],v_mat.a[ 3]);
-    println!("{},{},{},{},",v_mat.a[ 4],v_mat.a[ 5],v_mat.a[ 6],v_mat.a[ 7]);
-    println!("{},{},{},{},",v_mat.a[ 8],v_mat.a[ 9],v_mat.a[10],v_mat.a[11]);
-    println!("{},{},{},{},",v_mat.a[12],v_mat.a[13],v_mat.a[14],v_mat.a[15]);
-}
-
-#[test]
-fn test_assemble_triangle_3d(){
-    // 仮変数設定
-    let mut v_buf: Vec<f32> = vec![
-        1.0,-1.0,1.0,0.0,   // 最初の四角錘(Zero4)
-        1.0, 1.0,1.0,0.0,
-        -1.0,1.0,1.0,0.0,
-        1.0,1.0,-1.0,0.0,
-        0.0,0.0,0.0,-1.0,
-        2.0,-2.0,2.0, 2.0,   // 第二の四角錘(Zero0B)
-        2.0, 2.0,2.0, 2.0,
-        -2.0,2.0,2.0, 2.0,
-        0.0, 0.0,2.0,-2.0,
-        0.0, 0.0,0.0, 2.0,
-    ];
-    let v_len = v_buf.len();
-    let v_ptr = v_buf.as_mut_ptr() as usize;
-    let mut vi_buf: Vec<u16> = vec![ 0,1,2,3,4, 5,6,7,8,9 ];
-    let vi_ptr = vi_buf.as_mut_ptr() as usize;
-    // インデックス長を設定
-    let idx_len = vi_buf.len();
-
-    let mut n_buf: Vec<f32> = vec![
-        0.0,0.1,0.2,0.3,
-        3.0,0.1,0.2,0.3,
-        0.0,3.1,0.2,0.3,
-        0.0,0.1,3.2,0.3,
-        0.0,0.1,0.2,3.3
-    ];
-    let n_len = n_buf.len();
-    let n_ptr = n_buf.as_mut_ptr() as usize;
-    let mut ni_buf: Vec<u16> = vec![ 0,1,2,3,4, 0,1,2,3,4 ];
-    let ni_ptr = ni_buf.as_mut_ptr() as usize;
-
-    let mut c_buf: Vec<u32> = vec![ 0x80808080, 0x8000001, 0xffffffff, 0x0f0f0f0f, 0xf0f0f0f0 ];
-    let c_len = c_buf.len();
-    let c_ptr = c_buf.as_mut_ptr() as usize;
-    let mut ci_buf: Vec<u16> = vec![ 4,3,2,1,0, 0,1,2,3,4 ];
-    let ci_ptr = ci_buf.as_mut_ptr() as usize;
-
-    let poly_type = 0;  // 生成するポリゴンの法線等のタイプ。 0: 親の法線、1: 親のセンター
-
-    let mut mtx_buf: Vec<f32> = vec![
-        1.0,0.0,0.0,0.0,
-        0.0,1.0,0.0,0.0,
-        0.0,0.0,1.0,0.0,
-        0.0,0.0,0.0,1.0,
-        0.0,0.0,0.0,0.0     // offs
-    ];
-    let mtx4 = mtx_buf.as_mut_ptr() as usize;
-
-    let hpos = 0.0;
-
-    const TRIANGLE_SIZE: usize = 21;
-    let mut tri_buf: Vec<f32> = Vec::with_capacity(idx_len*TRIANGLE_SIZE);
-    let tri_len = idx_len*TRIANGLE_SIZE;
-    let tri_ptr = tri_buf.as_mut_ptr() as usize;
-    let vec_num = assemble_triangle_3d(
-        // v:vertex, n:normal, c:color, ?i:index
-        // ptr:buffer pointer, len:buffer length
-        // mtx4: Matrix4D+Vec4(Offset)
-        v_ptr, v_len, // 現在の予定では、頂点は5つ組となる。最後の一つは親のセンターとなる。
-        n_ptr, n_len, // 現在の予定では、法線は5つ組となる。最後の一つは親の法線となる。
-        c_ptr, c_len,
-        vi_ptr, ni_ptr, ci_ptr, idx_len,
-        poly_type,
-        mtx4,
-        hpos,
-        tri_ptr, tri_len
-    );
-/**/
-    unsafe{
-        let tri_buf = tri_ptr as *const f32;
-        let tri_slice: &[f32] = std::slice::from_raw_parts(tri_buf, idx_len*TRIANGLE_SIZE);
-        let mut idx = 0;
-        println!("Item Count: {}", vec_num);
-        for y in 0..6{
-            println!("Vec{}:", y);
-            for x in 0..3{
-                print!("{}, ",tri_slice[idx]);
-                idx += 1;
-            }
-            println!("\r\nNor{}:", y);
-            for x in 3..6{
-                print!("{}, ",tri_slice[idx]);
-                idx += 1;
-            }
-            println!("\r\nCol{}: {:x}", y, std::mem::transmute::<f32, u32>(tri_slice[idx]) );
-            idx += 1;
-
-            println!("\r\nIdx: {}",idx);
-        }
-    }
-/**/
-}
-
-// 頂点列をアフィン変換後、三角ポリゴン列を生成
-pub fn draw_triangles(
-    // v:vertex, n:normal, c:color, ?i:index
-    // ptr:buffer pointer, len:buffer length
-    // mtx4: Matrix4D+Vec4(Offset)
-    vtx: &[Vec4D], v_len: usize, // 現在の予定では、頂点は5つ組となる。最後の一つは親のセンターとなる。
-    nor: &[Vec4D], n_len: usize, // 現在の予定では、法線は5つ組となる。最後の一つは親の法線となる。
-    col: &[Color<u8>], c_len: usize,
-    v_idx: &[usize], n_idx: &[usize], c_idx: &[usize], idx_len: usize,
-    poly_type: i32, // 生成するポリゴンの法線等のタイプ。 0: 親の法線、1: 親のセンター
-    rot4: Mat4D,    // 関数外で作成
-    offs: Vec4D,    // 関数外で作成
-    hpos: f32,
-    rcv_buf: usize, buf_len: usize  // 受け取りバッファ
-) -> usize {
-
-    // 出力用バッファを用意
-    let mut tri_buf: Vec<f32> = Vec::with_capacity(idx_len);
-
-    // 4面体を形成 → 3角形を形成 → バッファに放り込む
-    let mut idx = 0;
-    let mut c_cnt = 0;
-    const INDEX_UNIT: usize = 5;
-    let mut item_count = 0;
-    while idx < idx_len {
-        //Vertex4つをアフィン変換し、しかる後四面体を作る
-        let mut ver: [Vertex4D;TriPylam::VERTEX_NUM] = [ Default::default();TriPylam::VERTEX_NUM];
-        print!("\r\n");
-        for ii in 0..TriPylam::VERTEX_NUM{
-            let idx_base = idx+ii;
-
-            let v_base = v_idx[idx_base];
-            ver[ii].vertex = &rot4.mul_vec(&vtx[v_base]) + &offs;
-            
-            let n_base = n_idx[idx_base];
-            ver[ii].normal = rot4.mul_vec(&nor[n_base]);
-
-            let c_base = c_idx[c_cnt+ii] as usize;
-            ver[ii].color  = col[c_base];
-        }
-        let mut plm: TriPylam = Default::default();
-        match poly_type {
-            0 => {  // normalをそのまま利用
-                //let parent_normal = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };    // 親を持ってこないといけない
-                let v_base = v_idx[idx+4] as usize;
-                let normal = &rot4.mul_vec(&vtx[v_base]);
-                plm = TriPylam::new( &ver[0], &ver[1], &ver[2], &ver[3], &normal );
-            },
-            1 => {  // centerからnormalを生成
-                //let parent_normal = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };    // センターを持ってこないといけない
-                let v_base = v_idx[idx+4] as usize;
-                let center = &rot4.mul_vec(&vtx[v_base]) + &offs;
-                plm = TriPylam::new_with_center( &ver[0], &ver[1], &ver[2], &ver[3], &center ).unwrap_or_default();
-            },
-            _ => {  // その他
-                // plm = Default::default();
-            }
-        }
-        let check_pattern = plm.check_div_pattern(hpos);
-        let mut triangle: Triangle = Default::default();
-        match check_pattern.0 {
-            DivPattern::Zero0A => {
-                let tri_pack = plm.create_2triangles( hpos, check_pattern.1, check_pattern.2, check_pattern.3, check_pattern.4 );
-                tri_pack.0.decompose(&mut tri_buf);
-                tri_pack.1.decompose(&mut tri_buf);
-                item_count += 2;
-                println!("CheckPat: Zero0A");
-            },
-            DivPattern::Zero4 => {
-                let tri_pack = plm.create_4triangles( check_pattern.1, check_pattern.2, check_pattern.3, check_pattern.4 );
-                tri_pack.0.decompose(&mut tri_buf);
-                tri_pack.1.decompose(&mut tri_buf);
-                tri_pack.2.decompose(&mut tri_buf);
-                tri_pack.3.decompose(&mut tri_buf);
-/*
-                println!("Tri0: {},{},{}", tri_pack.0.vertex[0].vertex.x, tri_pack.0.vertex[0].vertex.y, tri_pack.0.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.0.vertex[1].vertex.x, tri_pack.0.vertex[1].vertex.y, tri_pack.0.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.0.vertex[2].vertex.x, tri_pack.0.vertex[2].vertex.y, tri_pack.0.vertex[2].vertex.z,);
-                println!("Tri1: {},{},{}", tri_pack.1.vertex[0].vertex.x, tri_pack.1.vertex[0].vertex.y, tri_pack.1.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.1.vertex[1].vertex.x, tri_pack.1.vertex[1].vertex.y, tri_pack.1.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.1.vertex[2].vertex.x, tri_pack.1.vertex[2].vertex.y, tri_pack.1.vertex[2].vertex.z,);
-                println!("Tri2: {},{},{}", tri_pack.2.vertex[0].vertex.x, tri_pack.2.vertex[0].vertex.y, tri_pack.2.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.2.vertex[1].vertex.x, tri_pack.2.vertex[1].vertex.y, tri_pack.2.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.2.vertex[2].vertex.x, tri_pack.2.vertex[2].vertex.y, tri_pack.2.vertex[2].vertex.z,);
-                println!("Tri3: {},{},{}", tri_pack.3.vertex[0].vertex.x, tri_pack.3.vertex[0].vertex.y, tri_pack.3.vertex[0].vertex.z,);
-                println!("    : {},{},{}", tri_pack.3.vertex[1].vertex.x, tri_pack.3.vertex[1].vertex.y, tri_pack.3.vertex[1].vertex.z,);
-                println!("    : {},{},{}", tri_pack.3.vertex[2].vertex.x, tri_pack.3.vertex[2].vertex.y, tri_pack.3.vertex[2].vertex.z,);
-*/
-                item_count += 4;
-                println!("CheckPat: Zero04");
-            },
-            _ => {
-                triangle = plm.create_triangle(hpos, check_pattern);
-                triangle.decompose(&mut tri_buf);
-                item_count += 1;
-                println!("CheckPat: Solo");
-            }
-        }
-
-        idx += INDEX_UNIT;
-        c_cnt += INDEX_UNIT-1;
-    }
-    
-    unsafe{
-        let rcv_ptr = rcv_buf as *mut f32;
-        let rcv_slice: &mut [f32] = std::slice::from_raw_parts_mut(rcv_ptr, buf_len);
-        let loop_size = if tri_buf.len() < buf_len { tri_buf.len() }else{ buf_len };
-        println!("LoopSize: {}, TriBuf: {}, BufLen: {}", loop_size, tri_buf.len(), buf_len);
-        for x in 0..loop_size{
-            rcv_slice[x] = tri_buf[x];
-        }
-    }
-
-    tri_buf.len()
 }

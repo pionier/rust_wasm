@@ -81,16 +81,27 @@ static CUBE4_COL_INDEX: [usize; CUBE4_VTX_INDEX_NUM] = [
     5, 5, 5, 5,  5, 5, 5, 5,  5, 5, 5, 5,  5, 5, 5, 5,  5, 5, 5, 5,		// M
     6, 6, 6, 6,  6, 6, 6, 6,  6, 6, 6, 6,  6, 6, 6, 6,  6, 6, 6, 6, 	// W
     7, 7, 7, 7,  7, 7, 7, 7,  7, 7, 7, 7,  7, 7, 7, 7,  7, 7, 7, 7, 	// K
+/*
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+    0,1,2,3, 4,5,6,7, 0,1,2,3, 4,5,6,7, 0,1,2,3,
+*/
 ];
 
 
 //= 関数定義 ====================================================================
-pub fn generate_tesseract() -> Vec<TriPylam> {
+pub fn generate_tesseract(scale: f32) -> Vec<TriPylam> {
     generate_tesseract_base(
         &CUBE4_VTX, &CUBE4_VTX_INDEX,
         &CUBE4_NOR, &CUBE4_NOR_INDEX,
         &CUBE4_COL, &CUBE4_COL_INDEX,
-        CUBE4_VTX_INDEX_NUM
+        CUBE4_VTX_INDEX_NUM,
+        scale
     )
 }
 
@@ -98,7 +109,8 @@ fn generate_tesseract_base(
     pos_v: &[Vec4D], pos_i: &[usize],
     nor_v: &[Vec4D], nor_i: &[usize],
     col_v: &[Color::<u8>], col_i: &[usize],
-    i_num: usize
+    i_num: usize,
+    scale: f32
 ) -> Vec<TriPylam> {
     let mut pylam_array = Vec::<TriPylam>::new();
     let plm_num = i_num/4;
@@ -111,6 +123,7 @@ fn generate_tesseract_base(
         let v3 = Vertex4D{ vertex: pos_v[pos_i[idx+3]], normal: nor_v[nor_i[idx+3]], color: col_v[col_i[idx+3]] };
         let nor = nor_v[nor_i[idx]];
         let pylam = TriPylam::new( &v0, &v1, &v2, &v3, &nor );
+        let pylam = pylam.scale(scale);
 
         pylam_array.push(pylam);
     }
