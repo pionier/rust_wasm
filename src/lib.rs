@@ -51,13 +51,7 @@ macro_rules! console_log {
 fn window() -> web_sys::Window {
     web_sys::window().expect("no global `window` exists")
 }
-/*
-fn request_animation_frame(f: &Closure<dyn FnMut()>) {
-    window()
-        .request_animation_frame(f.as_ref().unchecked_ref())
-        .expect("should register `requestAnimationFrame` OK");
-}
-*/
+
 fn document() -> web_sys::Document {
     window()
         .document()
@@ -227,20 +221,11 @@ pub fn main() -> Result<(), JsValue> {
     context.clear_color(0.8, 0.8, 1.0, 1.0);
     context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
     
-    // light ---------------------------------------------------------------------
-    let light0 = fdw::Light{
-        position:   fdw::Vec3D{ x:0.0, y:20.0, z:0.0 },
-        up:         fdw::Vec3D{ x:0.0, y:0.0, z:0.0 },
-        ambient:    fdw::Vec4D{ x:0.3, y:0.3, z:0.3, h:1.0 }
-    };
-
     // Dwpth Test, Culling
     context.enable(WebGl2RenderingContext::CULL_FACE);
     context.enable(WebGl2RenderingContext::DEPTH_TEST);
     context.depth_func(WebGl2RenderingContext::LEQUAL);
     let canvas_rate = canvas.width() as f32/canvas.height() as f32;
-
-    console_log!("Light!");
 
     // Manufacture the element we're gonna append
     let val = document.create_element("p")?;
@@ -340,9 +325,9 @@ impl MainLoop {
         let mxy = fdw::Mat4D::rotate(r_xy,0);
         let myz = fdw::Mat4D::rotate(r_yz,1);
         let mzx = fdw::Mat4D::rotate(r_zx,2);
-        let myh = fdw::Mat4D::rotate(r_yh,3);
-        let mzh = fdw::Mat4D::rotate(r_zh,4);
-        let mhx = fdw::Mat4D::rotate(r_hx,5);
+        let myh = fdw::Mat4D::rotate(r_yh,5);
+        let mzh = fdw::Mat4D::rotate(r_zh,3);
+        let mhx = fdw::Mat4D::rotate(r_hx,4);
         let rot_mat = mxy.mul_r(&myz).mul_r(&mzx).mul_r(&mhx).mul_r(&myh).mul_r(&mzh);
 
         // 4D affine変換：データをバッファに詰める
@@ -357,10 +342,9 @@ impl MainLoop {
 
     // 変化があれば２回 true を返す
     fn check_change(&mut self) -> bool {
-
-        for idx in 0..8 {
+        for (idx,old) in self.old_sh.iter().enumerate() {
             unsafe{
-                if self.old_sh[idx] != SH_0.value[idx] {
+                if *old != SH_0.value[idx] {
                     self.is_changed = true;
                     return true;
                 }

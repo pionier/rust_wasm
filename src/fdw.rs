@@ -331,18 +331,6 @@ impl Triangle {
             buf.push(self.vertex[idx].normal.y);
             buf.push(self.vertex[idx].normal.z);
             buf.push( self.vertex[idx].color.pack_f32() );
-/*
-            let color_pack = self.vertex[idx].color.expand_f32();
-            buf.push(color_pack.0);
-            buf.push(color_pack.1);
-            buf.push(color_pack.2);
-            buf.push(color_pack.3);
-*/
-/*
-            println!("DecV{}: {},{},{}",idx,self.vertex[idx].vertex.x,self.vertex[idx].vertex.y,self.vertex[idx].vertex.z);
-            println!("   N{}: {},{},{}",idx,self.vertex[idx].normal.x,self.vertex[idx].normal.y,self.vertex[idx].normal.z);
-            println!("   C{}: {},{},{},{}",idx, color_pack.0,color_pack.1,color_pack.2,color_pack.3);
-*/
         }
     }
 
@@ -388,12 +376,6 @@ impl TriangleTex {
             buf.push(color_pack.1);
             buf.push(color_pack.2);
             buf.push(color_pack.3);
-/*
-            println!("DecV{}: {},{},{}",idx,self.vertex[idx].vertex.x,self.vertex[idx].vertex.y,self.vertex[idx].vertex.z);
-            println!("   N{}: {},{},{}",idx,self.vertex[idx].normal.x,self.vertex[idx].normal.y,self.vertex[idx].normal.z);
-            println!("   T{}: {},{},{}",idx,self.vertex[idx].texture.x,self.vertex[idx].texture.y,self.vertex[idx].texture.z);
-            println!("   C{}: {},{},{},{}",idx, color_pack.0,color_pack.1,color_pack.2,color_pack.3);
-*/
         }
     }
 }
@@ -436,30 +418,7 @@ impl Mat4D {
         mtx.a[15] = 1.0;
         mtx
     }
-/*
-    pub fn scale(&mut self, scale: f32) -> Mat4D {
-        let ret = Mat4D{ a:[
-                self.a[0]*scale,
-                self.a[1]*scale,
-                self.a[2]*scale,
-                self.a[3]*scale,
-                self.a[4]*scale,
-                self.a[5]*scale,
-                self.a[6]*scale,
-                self.a[7]*scale,
-                self.a[8]*scale,
-                self.a[9]*scale,
-                self.a[10]*scale,
-                self.a[11]*scale,
-                self.a[12]*scale,
-                self.a[13]*scale,
-                self.a[14]*scale,
-                self.a[15]*scale
-            ]
-        };
-        ret
-    }
-*/
+    
     pub fn transpose(&self) -> Mat4D {
         let ret = Mat4D{ a: [
                 self.a[0], self.a[4], self.a[ 8], self.a[12], 
