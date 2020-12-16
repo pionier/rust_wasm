@@ -44,6 +44,7 @@ extern "C" {
     fn log(s: &str);
 }
 
+#[allow(unused_macros)]
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
 }
@@ -152,11 +153,7 @@ pub fn main() -> Result<(), JsValue> {
     let tiled_floor = shapes::generate_tiled_floor(1.0, tile_num, col0, col1);
     let vtx_vec = tiled_floor.0;
     let nor_vec = tiled_floor.1;
-    let mut col_vec: Vec<f32> = Vec::new();
-    for v in tiled_floor.2{
-        let col = v as f32/255.0;
-        col_vec.push(col);
-    }
+    let col_vec: Vec<f32> = tiled_floor.2.iter().map(|x| *x as f32/255.0).collect();
 
     // Objects ------------------------------------------------------------------------
     const CUBE4_SIZE :usize = 128;
@@ -221,13 +218,11 @@ pub fn main() -> Result<(), JsValue> {
     context.clear_color(0.8, 0.8, 1.0, 1.0);
     context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);
     
-    // Dwpth Test, Culling
     context.enable(WebGl2RenderingContext::CULL_FACE);
     context.enable(WebGl2RenderingContext::DEPTH_TEST);
     context.depth_func(WebGl2RenderingContext::LEQUAL);
     let canvas_rate = canvas.width() as f32/canvas.height() as f32;
 
-    // Manufacture the element we're gonna append
     let val = document.create_element("p")?;
     val.set_inner_html("Hello from Rust!");
     body.append_child(&val)?;
@@ -236,7 +231,7 @@ pub fn main() -> Result<(), JsValue> {
     let closure_cloned = Rc::clone(&closure_captured);
     let main_loop_rc = Rc::new(RefCell::new(MainLoop::new(context, canvas_rate, tsrct, shader1, shader2)));
 
-    {   // setup requestAnimationFrame Loop
+    {
         let app_for_closure = Rc::clone(&main_loop_rc);
         closure_cloned.replace(Some(Closure::wrap(Box::new(move |time: f64|{
             app_for_closure.borrow_mut().on_animation_frame(time);
@@ -270,24 +265,22 @@ impl MainLoop {
             context: context,
             canvas_rate: canvas_rate,
             tsrct: tsrct,
-            is_changed: false,
+            is_changed: true,
             shader1: shader1,
             shader2: shader2,
             old_sh: [1.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0]
         }
     }
 
-    pub fn on_animation_frame(&mut self, time: f64){
+    pub fn on_animation_frame(&mut self, _time: f64){
         
         // 変化がなければ何もしない
         if !self.check_change() {
             return;
         }
-        // 新しい条件を記録
+        // 新しい条件を記録(コピー)
         unsafe{
-            for idx in 0..8 {
-                self.old_sh[idx] = SH_0.value[idx];
-            }
+            self.old_sh.iter_mut().zip(SH_0.value.iter()).for_each(|x| *x.0 = *x.1);
         }
 
         // 画面クリア
@@ -295,41 +288,36 @@ impl MainLoop {
 
         // 視点の設定
         let mut view_pos = fdw::Views::create(2.0, 10.0);
-        unsafe{
-            view_pos.rotate( SH_0.value[1]*3.0 );
-        }
+        view_pos.rotate(self.old_sh[1]);
+
         let vp_mat = view_pos.gen_view_proj(self.canvas_rate);
         
         // オブジェクトの座標(平行移動)
-        let pos_vec;
-        unsafe{
-            pos_vec = fdw::Vec4D{ x:0.0, y:0.0, z:0.0, h:SH_0.value[0]*2.0 };
-        }
+        let pos_vec = fdw::Vec4D{ x:0.0, y:0.0, z:0.0, h:self.old_sh[0]*2.0 };
 
         // オブジェクトの回転
-        let r_xy;
-        let r_yz;
-        let r_zx;
-        let r_zh;
-        let r_hx;
-        let r_yh;
-        unsafe{
-            r_xy = SH_0.value[2]*3.0;
-            r_yz = SH_0.value[3]*3.0;
-            r_zx = SH_0.value[4]*3.0;
-            r_yh = SH_0.value[5]*3.0;
-            r_zh = SH_0.value[6]*3.0;
-            r_hx = SH_0.value[7]*3.0;
-        }
-        // 回転行列の設定
-        let mxy = fdw::Mat4D::rotate(r_xy,0);
-        let myz = fdw::Mat4D::rotate(r_yz,1);
-        let mzx = fdw::Mat4D::rotate(r_zx,2);
-        let myh = fdw::Mat4D::rotate(r_yh,5);
-        let mzh = fdw::Mat4D::rotate(r_zh,3);
-        let mhx = fdw::Mat4D::rotate(r_hx,4);
-        let rot_mat = mxy.mul_r(&myz).mul_r(&mzx).mul_r(&mhx).mul_r(&myh).mul_r(&mzh);
+        let r_xy = self.old_sh[2];
+        let r_yz = self.old_sh[3];
+        let r_zx = self.old_sh[4];
+        let r_zh = self.old_sh[5];
+        let r_hx = self.old_sh[6];
+        let r_yh = self.old_sh[7];
 
+        // 回転行列の設定
+        let mxy = fdw::Mat4D::rotate(r_xy, 0);
+        let myz = fdw::Mat4D::rotate(r_yz, 1);
+        let mzx = fdw::Mat4D::rotate(r_zx, 2);
+        let mhx = fdw::Mat4D::rotate(r_zh, 3);
+        let myh = fdw::Mat4D::rotate(r_hx, 4);
+        let mzh = fdw::Mat4D::rotate(r_yh, 5);
+        let rot_mat = mxy.mul_r(&myz).mul_r(&mzx).mul_r(&mhx).mul_r(&myh).mul_r(&mzh);
+/*
+        console_log!("Mat:");
+        console_log!("{} {} {} {}",rot_mat.a[0],rot_mat.a[1],rot_mat.a[2],rot_mat.a[3]);
+        console_log!("{} {} {} {}",rot_mat.a[4],rot_mat.a[5],rot_mat.a[6],rot_mat.a[7]);
+        console_log!("{} {} {} {}",rot_mat.a[8],rot_mat.a[9],rot_mat.a[10],rot_mat.a[11]);
+        console_log!("{} {} {} {}",rot_mat.a[12],rot_mat.a[13],rot_mat.a[14],rot_mat.a[15]);
+*/
         // 4D affine変換：データをバッファに詰める
         self.shader1.make_buf(&self.context, &self.tsrct, &rot_mat, &pos_vec);
         
@@ -342,6 +330,7 @@ impl MainLoop {
 
     // 変化があれば２回 true を返す
     fn check_change(&mut self) -> bool {
+        // 今回変更があったか？
         for (idx,old) in self.old_sh.iter().enumerate() {
             unsafe{
                 if *old != SH_0.value[idx] {
@@ -350,7 +339,9 @@ impl MainLoop {
                 }
             }
         }
+        // 前回値チェック
         if self.is_changed {
+            // 前回変更があったなら今回もtureを返す
             self.is_changed = false;
             return true;
         }
@@ -375,8 +366,13 @@ fn draw_scene( context: &WebGl2RenderingContext, shader: &ShaderSet3, mvp_mat: &
 
 #[wasm_bindgen]
 pub fn change_val(num : i32, no: usize){
+    let std_num = if no == 0 {
+        300
+    }else{
+        314
+    };
     unsafe{
-        SH_0.value[no] = ((num-300) as f32)/100.0;
+        SH_0.value[no] = ((num-std_num) as f32)/100.0;
     }
 }
 
@@ -493,8 +489,9 @@ pub struct ShaderSet3{
 impl ShaderSet3{
     fn set_prog(&self, context: &WebGl2RenderingContext){
         context.use_program(Some(&self.gl_prog));
-        for idx in 0..3 {
-            context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&self.gl_buf[idx]));
+
+        for (idx, v) in self.gl_buf.iter().enumerate() {
+            context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(v));
 
             context.buffer_data_with_array_buffer_view(
                 WebGl2RenderingContext::ARRAY_BUFFER,
@@ -513,30 +510,24 @@ impl ShaderSet3{
 
     fn make_buf(&mut self, context: &WebGl2RenderingContext, tsrct: &Vec<fdw::TriPylam>, rot_mat: &fdw::Mat4D, pos_vec: &fdw::Vec4D){
         
-        self.gl_buf[0] = create_f32_buffer(&context, &self.vtx_buf[0]).unwrap();
-        self.gl_buf[1] = create_f32_buffer(&context, &self.vtx_buf[1]).unwrap();
-        self.gl_buf[2] = create_f32_buffer(&context, &self.vtx_buf[2]).unwrap();
-
-        unsafe{
-            self.vertices[0] = js_sys::Float32Array::view(&self.vtx_buf[0]);
-            self.vertices[1] = js_sys::Float32Array::view(&self.vtx_buf[1]);
-            self.vertices[2] = js_sys::Float32Array::view(&self.vtx_buf[2]);
+        for (idx, v) in self.vtx_buf.iter_mut().enumerate() {
+            self.gl_buf[idx] = create_f32_buffer(&context, v).unwrap();
+            unsafe{
+                self.vertices[idx] = js_sys::Float32Array::view(v);
+            }
+            v.clear();
         }
 
         let h_pos = 0.0;
-        &self.vtx_buf[0].clear();
-        &self.vtx_buf[1].clear();
-        &self.vtx_buf[2].clear();
         for plm in tsrct{
             let new_plm = plm.affine_transform( &rot_mat, &pos_vec );
             new_plm.make_arrays(h_pos, &mut self.vtx_buf);
         }
-        unsafe{
-            self.vertices[0] = js_sys::Float32Array::view(&self.vtx_buf[0]);
-            self.vertices[1] = js_sys::Float32Array::view(&self.vtx_buf[1]);
-            self.vertices[2] = js_sys::Float32Array::view(&self.vtx_buf[2]);
+        for (idx, v) in self.vtx_buf.iter_mut().enumerate() {
+            unsafe{
+                self.vertices[idx] = js_sys::Float32Array::view(v);
+            }
         }
-
         self.tri_num = (self.vtx_buf[0].len()*3) as i32;
     }
 }

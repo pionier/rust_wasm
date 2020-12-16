@@ -5,7 +5,6 @@ use std::ops::Add;
 use std::ops::Sub;
 use std::ops::Mul;
 use std::ops::Neg;
-use std::mem;
 
 fn is_near_zero(a:f32) ->bool {
     ( -std::f32::EPSILON < a )&&( a < std::f32::EPSILON )
@@ -50,22 +49,6 @@ impl<T: Copy> Color<T> {
     }
 }
 
-impl Color<u8>{
-    const LEN_F32: usize = 1;
-
-    fn expand_f32(&self) -> (f32,f32,f32,f32) {
-        ((self.r as f32)/255.0, (self.g as f32)/255.0, (self.b as f32)/255.0, (self.a as f32)/255.0 )
-    }
-
-    fn pack_f32(&self) -> f32 {
-        let raw_bytes = [self.r,self.g,self.b,self.a];
-        let packet = u32::from_ne_bytes(raw_bytes);
-        unsafe{
-            std::mem::transmute::<u32, f32>(packet)
-        }
-    }
-}
-
 fn lerp3_color_u8( rate:f32, c0:&Color<u8>, c1:&Color<u8> ) -> Color<u8> {
     let r = c0.r as f32 + rate*(c1.r as f32 - c0.r as f32);
     let g = c0.g as f32 + rate*(c1.g as f32 - c0.g as f32);
@@ -84,8 +67,6 @@ pub struct Vec3D {
 }
 
 impl Vec3D {
-    const LEN_F32: usize = 3;
-    const LEN_U8: usize = Vec3D::LEN_F32*mem::size_of::<f32>();
 
     fn calc_length(&self) -> f32 {
         (self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
@@ -166,8 +147,6 @@ impl Neg for Vec4D {
 }
 
 impl Vec4D {
-    const LEN_F32: usize = 4;
-    const LEN_U8: usize = Vec4D::LEN_F32*mem::size_of::<f32>();
 
     fn mul_scalor(&self, scale: f32) -> Vec4D {
         Vec4D{ x:self.x*scale, y:self.y*scale, z:self.z*scale, h:self.h*scale }
@@ -196,10 +175,12 @@ impl Vec4D {
         dst
     }
 
+    #[allow(dead_code)]
     fn is_near_zero(&self) -> bool {
         is_near_zero(self.x)&&is_near_zero(self.y)&&is_near_zero(self.z)&&is_near_zero(self.h)
     }
 
+    #[allow(dead_code)]
     fn zero(&mut self){
         self.x = 0.0;
         self.y = 0.0;
@@ -216,10 +197,6 @@ pub struct Vertex3D{
     color:  Color<u8>
 }
 
-impl Vertex3D {
-    const LEN_F32: usize = Vec3D::LEN_F32*2 + Color::<u8>::LEN_F32;
-}
-
 //= Vertex3DTex ============================================================
 #[derive(Debug, PartialEq, Copy, Clone, Default)]
 pub struct Vertex3DTex{
@@ -228,11 +205,6 @@ pub struct Vertex3DTex{
     pub texture: Vec3D,
     pub color:  Color<u8>
 }
-
-impl Vertex3DTex {
-    const LEN_F32: usize = Vec3D::LEN_F32*3 + Color::<u8>::LEN_F32;
-}
-
 
 //= Vertex4D ============================================================
 #[derive(Debug, PartialEq, Copy, Clone, Default)]
@@ -243,7 +215,6 @@ pub struct Vertex4D{
 }
 
 impl Vertex4D {
-    const LEN_F32: usize = Vec4D::LEN_F32*2 + Color::<u8>::LEN_F32;
 
     fn shrink(&self) -> Vertex3D {
         Vertex3D{
@@ -279,8 +250,8 @@ pub struct Vertex4DTex{
     color:  Color<u8>
 }
 
+#[allow(dead_code)]
 impl Vertex4DTex {
-    const LEN_F32: usize = Vec4D::LEN_F32*3 + Color::<u8>::LEN_F32;
 
     fn shrink(&self) -> Vertex3DTex {
         Vertex3DTex{
@@ -302,6 +273,7 @@ fn shrink_lerp( hpos:f32, vtx0:&Vertex4D, vtx1:&Vertex4D) -> Vertex3D {
     }
 }
 
+#[allow(dead_code)]
 //= shrink_lerp_tex ============================================================
 fn shrink_lerp_tex( hpos:f32, vtx0:&Vertex4DTex, vtx1:&Vertex4DTex) -> Vertex3DTex {
     let rate = get_lerp_rate(hpos, vtx0.vertex.h, vtx1.vertex.h);
@@ -320,62 +292,19 @@ pub struct Triangle{
 }
 
 impl Triangle {
-    const LEN_F32: usize = Vertex3D::LEN_F32 + Color::<u8>::LEN_F32;
-
-    fn decompose(&self, buf: &mut Vec<f32>){
-        for idx in 0..3{
-            buf.push(self.vertex[idx].vertex.x);
-            buf.push(self.vertex[idx].vertex.y);
-            buf.push(self.vertex[idx].vertex.z);
-            buf.push(self.vertex[idx].normal.x);
-            buf.push(self.vertex[idx].normal.y);
-            buf.push(self.vertex[idx].normal.z);
-            buf.push( self.vertex[idx].color.pack_f32() );
-        }
-    }
 
     fn push_buffer( &self, v_array: &mut Vec<f32>, n_array: &mut Vec<f32>, c_array: &mut Vec<f32>){
-        for ii in 0..3 {
-            v_array.push(self.vertex[ii].vertex.x);
-            v_array.push(self.vertex[ii].vertex.y);
-            v_array.push(self.vertex[ii].vertex.z);
-            n_array.push(self.vertex[ii].normal.x);
-            n_array.push(self.vertex[ii].normal.y);
-            n_array.push(self.vertex[ii].normal.z);
-//            c_array.push( self.vertex[ii].color.pack_f32() );
-            c_array.push(self.vertex[ii].color.r as f32/255.0);
-            c_array.push(self.vertex[ii].color.g as f32/255.0);
-            c_array.push(self.vertex[ii].color.b as f32/255.0);
-            c_array.push(self.vertex[ii].color.a as f32/255.0);
-        }
-}
-}
-
-//= TriangleTex ============================================================
-#[derive(Debug, PartialEq, Default)]
-pub struct TriangleTex{
-    vertex: [Vertex3DTex;3],
-}
-
-impl TriangleTex {
-//    const LEN_F32: i32 = 13;
-
-    fn decompose(&self, buf: &mut Vec<f32>){
-        for idx in 0..3{
-            buf.push(self.vertex[idx].vertex.x);
-            buf.push(self.vertex[idx].vertex.y);
-            buf.push(self.vertex[idx].vertex.z);
-            buf.push(self.vertex[idx].normal.x);
-            buf.push(self.vertex[idx].normal.y);
-            buf.push(self.vertex[idx].normal.z);
-            buf.push(self.vertex[idx].texture.x);
-            buf.push(self.vertex[idx].texture.y);
-            buf.push(self.vertex[idx].texture.z);
-            let color_pack = self.vertex[idx].color.expand_f32();
-            buf.push(color_pack.0);
-            buf.push(color_pack.1);
-            buf.push(color_pack.2);
-            buf.push(color_pack.3);
+        for v in self.vertex.iter() {
+            v_array.push(v.vertex.x);
+            v_array.push(v.vertex.y);
+            v_array.push(v.vertex.z);
+            n_array.push(v.normal.x);
+            n_array.push(v.normal.y);
+            n_array.push(v.normal.z);
+            c_array.push(v.color.r as f32/255.0);
+            c_array.push(v.color.g as f32/255.0);
+            c_array.push(v.color.b as f32/255.0);
+            c_array.push(v.color.a as f32/255.0);            
         }
     }
 }
@@ -395,7 +324,6 @@ pub struct Mat4D{
 
 impl Mat4D {
     const LEN_F32: usize = 16;
-    const LEN_U8: usize = Mat4D::LEN_F32*mem::size_of::<f32>();
 
     pub fn mul_vec(&self, pos: &Vec4D) -> Vec4D {
         let dst = Vec4D {
@@ -690,7 +618,6 @@ pub enum DivPattern{
 }
 
 impl TriPylam{
-    const VERTEX_NUM: usize = 4;
 
     pub fn new( v0: &Vertex4D, v1: &Vertex4D, v2: &Vertex4D, v3: &Vertex4D, nor: &Vec4D ) -> TriPylam {
         let plm = TriPylam{
@@ -873,34 +800,6 @@ impl TriPylam{
     }
 }
 
-#[test]
-fn test_tripylam(){
-    let v0 = Vec4D{ x:1.0, y:0.0, z:0.0, h:0.0 };
-    let v1 = Vec4D{ x:0.0, y:1.0, z:0.0, h:0.0 };
-    let v2 = Vec4D{ x:0.0, y:0.0, z:1.0, h:0.0 };
-    let v3 = Vec4D{ x:0.0, y:0.0, z:0.0, h:1.0 };
-    let center0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let center1 = Vec4D{ x:1.0, y:1.0, z:1.0, h:1.0 };
-    let col = Color{ r:255, g:255, b:255, a:255 };
-
-    let vtx0 = Vertex4D{ vertex: v0, normal: v0, color: col };
-    let vtx1 = Vertex4D{ vertex: v1, normal: v1, color: col };
-    let vtx2 = Vertex4D{ vertex: v2, normal: v2, color: col };
-    let vtx3 = Vertex4D{ vertex: v3, normal: v3, color: col };
-
-    let plm0 = TriPylam::new_with_center(&vtx0, &vtx1, &vtx2, &vtx3, &center0);
-    let plm1 = TriPylam::new_with_center(&vtx0, &vtx1, &vtx2, &vtx3, &center1);
-
-    let nor0 = plm0.unwrap().normal;
-    let nor1 = plm1.unwrap().normal;
-    
-//    println!("Nor0: {},{},{},{}",nor0.x, nor0.y, nor0.z, nor0.h);
-//    println!("Nor1: {},{},{},{}",nor1.x, nor1.y, nor1.z, nor1.h);
-
-    let nor2 = &nor0+&nor1;
-    assert!( nor2.is_zero());
-}
-
 //= TriPylam4DTex ============================================================
 
 #[derive(Debug, PartialEq, Copy, Clone, Default)]
@@ -911,8 +810,8 @@ pub struct TriPylamTex{
 }
 
 impl TriPylamTex{
-    const VERTEX_NUM: usize = 4;
 
+    #[allow(dead_code)]
     fn new( v0: Vec4D, v1: Vec4D, v2: Vec4D, v3: Vec4D, t0: Vec3D, t1: Vec3D, t2: Vec3D, t3: Vec3D, nor: Vec4D ) -> TriPylamTex {
         let plm = TriPylamTex{
             vertex: [v0,v1,v2,v3],
@@ -982,81 +881,4 @@ fn calc_normal4d ( vtx0: &Vec4D, vtx1: &Vec4D, vtx2: &Vec4D, vtx3: &Vec4D, cente
     }
     nor.normalize();
     Some(nor)
-}
-
-#[test]
-fn test_calc_normal4d(){
-    let v0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let v1 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let v2 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let v3 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let center0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-
-    let nor = calc_normal4d(&v0, &v1, &v2, &v3, &center0);
-    assert_eq!( nor, None );
-    
-    let mut vt = Vec4D{ x:0.0, y:0.0, z:0.0, h:1.0 };
-    vt.normalize();
-    assert!( is_near_zero(vt.x), "Nor0.X: {}", vt.x );
-    assert!( is_near_zero(vt.y), "Nor0.Y: {}", vt.y );
-    assert!( is_near_zero(vt.z), "Nor0.Z: {}", vt.z );
-    assert!( is_near_eq(vt.h, 1.0), "Nor0.H: {}", vt.h );
-
-    let v0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:0.0 };
-    let v1 = Vec4D{ x:1.0, y:0.0, z:0.0, h:0.0 };
-    let v2 = Vec4D{ x:0.0, y:1.0, z:0.0, h:0.0 };
-    let v3 = Vec4D{ x:0.0, y:0.0, z:1.0, h:0.0 };
-
-    let center0 = Vec4D{ x:0.0, y:0.0, z:0.0, h:-1.0 };
-
-    let nor0 = calc_normal4d(&v0, &v1, &v2, &v3, &center0).unwrap();
-
-    assert!( is_near_zero(nor0.x), "Nor0.X: {}", nor0.x );
-    assert!( is_near_zero(nor0.y), "Nor0.Y: {}", nor0.y );
-    assert!( is_near_zero(nor0.z), "Nor0.Z: {}", nor0.z );
-    assert!( is_near_eq(nor0.h, 1.0), "Nor0.H: {}", nor0.h );
-}
-
-
-//------------------------------------------------------------------
-// affine4D
-// ４次元アフィン変換
-//	src:		// 頂点、( x, y, z, h )x数
-//	rotate:		// ローカル座標系での回転
-//	offs:		// ローカス座標系での位置オフセット
-//	scale:		// 各方向のスケール
-
-fn affine4d( src: &Vec<Vec4D>, rotate: &[f32;6], rot_plane: &[i32;6], offs: &Vec4D, scale: &Vec4D ) -> Vec<Vec4D> { 
-
-    // 各Matrixの生成
-    let mut scale_mtx = Mat4D::identity();
-    scale_mtx.a[ 0] = scale.x;
-    scale_mtx.a[ 5] = scale.y;
-    scale_mtx.a[10] = scale.z;
-    scale_mtx.a[15] = scale.h;
-    let rotate_array: [Mat4D;6] = [
-        Mat4D::rotate(rotate[0],rot_plane[0]),
-        Mat4D::rotate(rotate[1],rot_plane[1]),
-        Mat4D::rotate(rotate[2],rot_plane[2]),
-        Mat4D::rotate(rotate[3],rot_plane[3]),
-        Mat4D::rotate(rotate[4],rot_plane[4]),
-        Mat4D::rotate(rotate[5],rot_plane[5])
-    ];
-
-    // 各Matrixの合成
-    let mut rotate_mtx = rotate_array[0];
-    rotate_mtx = &rotate_mtx*&rotate_array[1];
-    rotate_mtx = &rotate_mtx*&rotate_array[2];
-    rotate_mtx = &rotate_mtx*&rotate_array[3];
-    rotate_mtx = &rotate_mtx*&rotate_array[4];
-    rotate_mtx = &rotate_mtx*&rotate_array[5];
-    let affine_mtx = &rotate_mtx*&scale_mtx;
-
-    // 各頂点のaffine変換
-    let mut dst: Vec<Vec4D> = Vec::new();
-    for v in src {
-        let tmp = &affine_mtx.mul_vec(v) + offs;
-        dst.push(tmp);
-    }
-    dst
 }

@@ -2,59 +2,23 @@
   <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
     <title>Wasm-GL</title>
-    <link rel="stylesheet" type="text/css" href="fdw_idx2.css">
+    <link rel="stylesheet" type="text/css" href="fdw_std.css">
   </head>
   <body>
     <header>
-      <h6>
-        ---　Now I a fourfold vision see and a fourfold vision is given to me.　---
-      </h6>
       <h1>
         fDWalkers
       </h1>
-      <h6>
-        ---　Now I a fourfold vision see and a fourfold vision is given to me.　---
-      </h6>
     </header>
-    テスト上方<br>
-       <!-- Note the usage of `type=module` here as this is an ES6 module -->
+    <section style="font-size:16px">
+      <b>Rust+Wasm+WebGL</b>
+      <button onclick="location.href='./content_20201221_e.html'" class=btn1 >English</button>
+      <hr size=5 color=maroon>
+    </section>
     <script type="module">
-          // Use ES module import syntax to import functionality from the module
-          // that we have compiled.
-          //
-          // Note that the `default` import is an initialization function which
-          // will "boot" the module and make it ready to use. Currently browsers
-          // don't support natively imported WebAssembly as an ES module, but
-          // eventually the manual initialization won't be required!
       import init, { change_val } from './pkg/rust_wasm.js';
 
       async function run() {
-            // First up we need to actually load the wasm file, so we use the
-            // default export to inform it where the wasm file is located on the
-            // server, and then we wait on the returned promise to wait for the
-            // wasm to be loaded.
-            //
-            // It may look like this: `await init('./pkg/without_a_bundler_bg.wasm');`,
-            // but there is also a handy default inside `init` function, which uses
-            // `import.meta` to locate the wasm file relatively to js file.
-            //
-            // Note that instead of a string you can also pass in any of the
-            // following things:
-            //
-            // * `WebAssembly.Module`
-            //
-            // * `ArrayBuffer`
-            //
-            // * `Response`
-            //
-            // * `Promise` which returns any of the above, e.g. `fetch("./path/to/wasm")`
-            //
-            // This gives you complete control over how the module is loaded
-            // and compiled.
-            //
-            // Also note that the promise, when resolved, yields the wasm module's
-            // exports which is the same as importing the `*_bg` module in other
-            // modes
         await init();
 
         set_bars('H_Pos', 'H_PosTxt', 0);
@@ -72,6 +36,7 @@
         let txt = document.getElementById(txt_id);
         pos.addEventListener('change', function(){txt.value = pos.value;change_val(parseInt(pos.value,10),no);},false);
         txt.addEventListener('blur',function(){ pos.value=txt.value;change_val(parseInt(txt.value,10),no);},false);
+        change_val(parseInt(pos.value,10),no);
       }
 
       run();
@@ -79,28 +44,38 @@
 
     <canvas id="canvas" width="512" height="512"></canvas>
     <div>
+      <br>
       <input id="H_Pos" type = "range" value="300" max="360" min="240"> H-Position
       <input id="H_PosTxt" type="text" name="H_PosName" value="300"><br>
-      <input id="Eye_Rot" type = "range" value="300" max="360" min="240"> Eye Rotation
-      <input id="Eye_RotTxt" type="text" name="Eye_RotName" value="300"><br>
-      <input id="RotXY" type = "range" value="300" max="360" min="240"> Rot XY
-      <input id="RotXY_txt" type="text" name="RotXYName" value="300"><br>
-      <input id="RotYZ" type = "range" value="300" max="360" min="240"> Rot YZ
-      <input id="RotYZ_txt" type="text" name="RotYZName" value="300"><br>
-      <input id="RotXZ" type = "range" value="300" max="360" min="240"> Rot XZ
-      <input id="RotXZ_txt" type="text" name="RotXZName" value="300"><br>
-      <input id="RotZH" type = "range" value="300" max="360" min="240"> Rot ZH
-      <input id="RotZH_txt" type="text" name="RotZHName" value="300"><br>
-      <input id="RotHX" type = "range" value="300" max="360" min="240"> Rot XH
-      <input id="RotHX_txt" type="text" name="RotHXName" value="300"><br>
-      <input id="RotYH" type = "range" value="300" max="360" min="240"> Rot YH
-      <input id="RotYH_txt" type="text" name="RotYHName" value="300"><br>
-    </div>  
-    テスト下方
+      <input id="Eye_Rot" type = "range" value="314" max="628" min="0"> Eye Rotation
+      <input id="Eye_RotTxt" type="text" name="Eye_RotName" value="0"><br>
+      <input id="RotXY" type = "range" value="100" max="628" min="0"> Rot XY
+      <input id="RotXY_txt" type="text" name="RotXYName" value="100"><br>
+      <input id="RotYZ" type = "range" value="400" max="628" min="0"> Rot YZ
+      <input id="RotYZ_txt" type="text" name="RotYZName" value="400"><br>
+      <input id="RotXZ" type = "range" value="333" max="628" min="0"> Rot XZ
+      <input id="RotXZ_txt" type="text" name="RotXZName" value="333"><br>
+      <input id="RotHX" type = "range" value="0" max="628" min="0"> Rot XH
+      <input id="RotHX_txt" type="text" name="RotHXName" value="0"><br>
+      <input id="RotYH" type = "range" value="0" max="628" min="0"> Rot YH
+      <input id="RotYH_txt" type="text" name="RotYHName" value="0"><br>
+      <input id="RotZH" type = "range" value="0" max="628" min="0"> Rot ZH
+      <input id="RotZH_txt" type="text" name="RotZHName" value="0"><br>
+    </div>
+    速さを求めて作成言語を Rust+WebAssembly に変更しました。<br>
+    新言語勉強しながらとはいえ、七転八倒しながらの更新となりました。<br>
+    内容としては単なる八胞体です。<br>
+    <br>
+    回転方向について：<br>
+    Rot XYはＸＹ平面上の回転を意味します。<br>
+    ３次元空間においては、Ｚ軸を中心とした回転になります。他も同様です。<br>
+    ４つめの方向・軸をＨ方向・Ｈ軸と呼称しています。<br>
+    Ｗ軸でないのは四元数のスカラー元との混同を避けるためです。<br>  
+    <p style="text-align:right">2020Dec21 The Winter Solstice<a href="http://www7b.biglobe.ne.jp/~fdw/">fDWalkers</a></p>
     <footer>
-      <h3>
+      <h1>
         fDW(2015Oct31-   )　
-      </h3>
+      </h1>
     </footer>    
 </body>
 </html>
