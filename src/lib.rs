@@ -223,10 +223,6 @@ pub fn main() -> Result<(), JsValue> {
     context.depth_func(WebGl2RenderingContext::LEQUAL);
     let canvas_rate = canvas.width() as f32/canvas.height() as f32;
 
-    let val = document.create_element("p")?;
-    val.set_inner_html("Hello from Rust!");
-    body.append_child(&val)?;
-
     let closure_captured = Rc::new(RefCell::new(None));
     let closure_cloned = Rc::clone(&closure_captured);
     let main_loop_rc = Rc::new(RefCell::new(MainLoop::new(context, canvas_rate, tsrct, shader1, shader2)));
