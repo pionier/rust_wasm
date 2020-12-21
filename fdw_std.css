@@ -1,0 +1,79 @@
+
+header {
+	background-color : #000;
+	text-align : center;
+}
+
+header h1 {
+	font-size : 32pt;
+	color : #ff8;
+	font-weight : bolder;
+}
+
+h1:before{
+content:"";
+display:block;
+height:5px;
+width:100%;
+	background:-webkit-gradient(linear, left top, right top
+		, from(#eeaa08)
+		, color-stop(0.30, #ff8)
+		, to(#eeaa00));
+	background:linear-gradient(left, #fc0, #ff8);
+	margin-bottom: 20px;
+}
+
+h1:after {
+content:"";
+display:block;
+height:5px;
+width:100%;
+	background:-webkit-gradient(linear, left top, right top
+		, from(#eeaa08)
+		, color-stop(0.30, #ff8)
+		, to(#eeaa00));
+	background:linear-gradient(left, #fc0, #ff8);
+	margin-top: 20px;
+}
+
+header h6 {
+	font-size : 6pt;
+	color : #fd0;
+	letter-spacing : 1px;
+	border-style:solid;
+	border-color:#fd0;
+	border-width:2px 0px 2px 0px;
+}
+
+
+body h2{
+	font-size : 20pt;
+}
+
+body h3{
+	font-size : 16pt;
+}
+
+footer h1{
+	font-size : 12pt;
+	color : #fff;
+	font-weight : normal;
+	text-align : right;
+	background-color : #b0a0ff;
+}
+
+.imgpic{
+
+}
+
+.imgpic:hover{
+	transition-duration: 0.5s;
+	transform: scale(1.05,1.05);
+}
+
+.btn1 {
+    float: right;
+}
+.btn1 + * {
+    clear: both;;
+}

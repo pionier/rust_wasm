@@ -1,0 +1,82 @@
+<html>
+  <head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type"/>
+    <title>Wasm-GL</title>
+    <link rel="icon" href="./favicon.ico" />
+    <link rel="stylesheet" type="text/css" href="fdw_std.css">
+  </head>
+  <body>
+    <header>
+      <h1>
+        fDWalkers
+      </h1>
+    </header>
+    <section style="font-size:16px">
+      <b>Rust+Wasm+WebGL</b>
+      <hr size=5 color=maroon>
+    </section>
+    <script type="module">
+      import init, { change_val } from './pkg/rust_wasm.js';
+
+      async function run() {
+        await init();
+
+        set_bars('H_Pos', 'H_PosTxt', 0);
+        set_bars('Eye_Rot', 'Eye_RotTxt', 1);
+        set_bars('RotXY', 'RotXY_txt', 2);
+        set_bars('RotYZ', 'RotYZ_txt', 3);
+        set_bars('RotXZ', 'RotXZ_txt', 4);
+        set_bars('RotZH', 'RotZH_txt', 7);
+        set_bars('RotHX', 'RotHX_txt', 5);
+        set_bars('RotYH', 'RotYH_txt', 6);
+      }
+
+      function set_bars(pos_id,txt_id,no){
+        let pos = document.getElementById(pos_id);
+        let txt = document.getElementById(txt_id);
+        pos.addEventListener('change', function(){txt.value = pos.value;change_val(parseInt(pos.value,10),no);},false);
+        txt.addEventListener('blur',function(){ pos.value=txt.value;change_val(parseInt(txt.value,10),no);},false);
+        change_val(parseInt(pos.value,10),no);
+      }
+
+      run();
+    </script>
+
+    <canvas id="canvas" width="512" height="512"></canvas>
+    <div>
+      <br>
+      <input id="H_Pos" type = "range" value="300" max="360" min="240"> H-Position
+      <input id="H_PosTxt" type="text" name="H_PosName" value="300"><br>
+      <input id="Eye_Rot" type = "range" value="314" max="628" min="0"> Eye Rotation
+      <input id="Eye_RotTxt" type="text" name="Eye_RotName" value="0"><br>
+      <input id="RotXY" type = "range" value="100" max="628" min="0"> Rot XY
+      <input id="RotXY_txt" type="text" name="RotXYName" value="100"><br>
+      <input id="RotYZ" type = "range" value="400" max="628" min="0"> Rot YZ
+      <input id="RotYZ_txt" type="text" name="RotYZName" value="400"><br>
+      <input id="RotXZ" type = "range" value="333" max="628" min="0"> Rot XZ
+      <input id="RotXZ_txt" type="text" name="RotXZName" value="333"><br>
+      <input id="RotHX" type = "range" value="0" max="628" min="0"> Rot XH
+      <input id="RotHX_txt" type="text" name="RotHXName" value="0"><br>
+      <input id="RotYH" type = "range" value="0" max="628" min="0"> Rot YH
+      <input id="RotYH_txt" type="text" name="RotYHName" value="0"><br>
+      <input id="RotZH" type = "range" value="0" max="628" min="0"> Rot ZH
+      <input id="RotZH_txt" type="text" name="RotZHName" value="0"><br>
+    </div>
+    速さを求めて作成言語を Rust+WebAssembly に変更しました。<br>
+    新言語勉強しながらとはいえ、七転八倒しながらの更新となりました。<br>
+    内容としては単なる八胞体です。<br>
+    <br>
+    回転方向について：<br>
+    Rot XYはＸＹ平面上の回転を意味します。<br>
+    ３次元空間においては、Ｚ軸を中心とした回転になります。他も同様です。<br>
+    ４つめの方向・軸をＨ方向・Ｈ軸と呼称しています。<br>
+    Ｗ軸でないのは四元数のスカラー元との混同を避けるためです。<br>  
+    <p style="text-align:right">2020Dec21 The Winter Solstice</p>
+    <footer>
+      <a href="http://www7b.biglobe.ne.jp/~fdw/">fDWalkers</a>
+      <h1>
+        fDW(2015Oct31-   )　
+      </h1>
+    </footer>    
+</body>
+</html>
